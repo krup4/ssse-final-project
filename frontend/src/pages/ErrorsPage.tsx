@@ -1,0 +1,58 @@
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowDownUp } from "lucide-react";
+import { metricLabels, metricUnits } from "../entities/labels";
+import { api } from "../shared/api/endpoints";
+import { formatDateTime, formatNumber } from "../shared/lib/format";
+import { Panel } from "../shared/ui/Panel";
+
+export function ErrorsPage() {
+  const [descending, setDescending] = useState(true);
+  const { data = [] } = useQuery({ queryKey: ["worst-errors"], queryFn: api.worstErrors });
+  const rows = useMemo(
+    () => [...data].sort((a, b) => (descending ? b.absoluteError - a.absoluteError : a.absoluteError - b.absoluteError)),
+    [data, descending]
+  );
+
+  return (
+    <div className="page-grid">
+      <Panel
+        title="Top forecast errors"
+        action={
+          <button type="button" className="ghost-button" onClick={() => setDescending((value) => !value)}>
+            <ArrowDownUp size={16} /> Sort
+          </button>
+        }
+      >
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Station</th>
+                <th>Region</th>
+                <th>Metric</th>
+                <th>Forecast</th>
+                <th>Actual</th>
+                <th>Abs. error</th>
+                <th>Observed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.stationName}</td>
+                  <td>{row.regionName}</td>
+                  <td>{metricLabels[row.metric]}</td>
+                  <td>{formatNumber(row.forecastValue)} {metricUnits[row.metric]}</td>
+                  <td>{formatNumber(row.actualValue)} {metricUnits[row.metric]}</td>
+                  <td><strong>{formatNumber(row.absoluteError)}</strong></td>
+                  <td>{formatDateTime(row.observedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </div>
+  );
+}
