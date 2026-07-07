@@ -1,0 +1,19 @@
+bin/
+vendor/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace
+go.sum
+
+# IDE
+.vscode/
+.idea/
+
+# System
+.DS_Store
+thumbs.db
