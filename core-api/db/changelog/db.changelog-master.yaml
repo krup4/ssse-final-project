@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - include:
+      file: changes/001_core_schema.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/002_demo_seed.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/003_temperature_single_value.sql
+      relativeToChangelogFile: true
