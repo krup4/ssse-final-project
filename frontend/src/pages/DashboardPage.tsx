@@ -2,12 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, Gauge, RadioTower, Server, Timer, TriangleAlert } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../shared/api/endpoints";
-import { formatNumber } from "../shared/lib/format";
+import { useFilters } from "../features/filters/FiltersContext";
+import { formatChartDate, formatNumber } from "../shared/lib/format";
 import { MetricCard } from "../shared/ui/MetricCard";
 import { Panel } from "../shared/ui/Panel";
 
 export function DashboardPage() {
-  const { data } = useQuery({ queryKey: ["overview"], queryFn: api.overview });
+  const { filters } = useFilters();
+  const { data } = useQuery({ queryKey: ["overview", filters], queryFn: () => api.overview(filters) });
 
   if (!data) {
     return <div className="page-grid">Loading dashboard...</div>;
@@ -16,7 +18,7 @@ export function DashboardPage() {
   return (
     <div className="page-grid">
       <div className="metrics-grid">
-        <MetricCard icon={RadioTower} label="Active stations" value={String(data.activeStations)} hint="5 regions reporting" tone="good" />
+        <MetricCard icon={RadioTower} label="Active stations" value={String(data.activeStations)} hint="Reporting now" tone="good" />
         <MetricCard icon={TriangleAlert} label="Degraded/offline" value={String(data.degradedStations + data.offlineStations)} hint="Needs operator review" tone="warn" />
         <MetricCard icon={Server} label="Kafka lag" value={formatNumber(data.kafkaLag)} hint="Telemetry events pending" tone="warn" />
         <MetricCard icon={Timer} label="p95 latency" value={`${data.p95LatencyMs} ms`} hint={`${data.requestRate} req/min`} />
@@ -34,9 +36,9 @@ export function DashboardPage() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ec" />
-              <XAxis dataKey="date" tickLine={false} axisLine={false} />
+              <XAxis dataKey="date" tickLine={false} axisLine={false} tickFormatter={formatChartDate} minTickGap={24} />
               <YAxis tickLine={false} axisLine={false} />
-              <Tooltip />
+              <Tooltip labelFormatter={(value) => formatChartDate(String(value))} />
               <Area type="monotone" dataKey="mae" stroke="#2f80ed" fill="url(#mae)" strokeWidth={2} />
               <Area type="monotone" dataKey="rmse" stroke="#d64545" fill="transparent" strokeWidth={2} />
             </AreaChart>

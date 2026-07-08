@@ -24,6 +24,8 @@ func validParameter(parameter domain.WeatherParameter) bool {
 	switch parameter {
 	case domain.ParameterTemperature, domain.ParameterPrecipitation, domain.ParameterWindSpeed, domain.ParameterWindGust, domain.ParameterHumidity, domain.ParameterPressure:
 		return true
+	case domain.WeatherParameter("precipitation"):
+		return true
 	default:
 		return false
 	}

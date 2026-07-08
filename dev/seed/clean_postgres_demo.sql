@@ -1,0 +1,11 @@
+\set ON_ERROR_STOP on
+
+BEGIN;
+
+DELETE FROM archive WHERE station_id BETWEEN 101 AND 105;
+DELETE FROM forecasts WHERE station_id BETWEEN 101 AND 105;
+DELETE FROM alerts WHERE id LIKE 'dev-%';
+DELETE FROM backfill_jobs WHERE id LIKE 'dev-%';
+DELETE FROM stations WHERE id BETWEEN 101 AND 105;
+
+COMMIT;

@@ -2,14 +2,7 @@ export type UserRole = "admin" | "analyst" | "operator" | "viewer";
 
 export type MetricKey = "temperature" | "wind_speed" | "humidity" | "pressure" | "precipitation";
 
-export type WeatherParameterKey =
-  | "temperature_min"
-  | "temperature_max"
-  | "precipitation_total"
-  | "wind_speed"
-  | "wind_gust"
-  | "humidity"
-  | "pressure";
+export type WeatherParameterKey = string;
 
 export type StationStatus = "online" | "degraded" | "offline";
 
@@ -19,27 +12,28 @@ export type AlertStatus = "open" | "acknowledged" | "resolved";
 
 export interface User {
   id: string;
+  login: string;
   name: string;
   email: string;
   role: UserRole;
+  isActive: boolean;
   lastSeen: string;
-}
-
-export interface Region {
-  id: string;
-  name: string;
 }
 
 export interface Station {
   id: string;
   name: string;
-  regionId: string;
   lat: number;
   lon: number;
   status: StationStatus;
   activeSensors: number;
   maxError: number;
   lastTelemetryAt: string;
+}
+
+export interface ForecastField {
+  id: string;
+  name: WeatherParameterKey;
 }
 
 export interface OverviewMetrics {
@@ -57,7 +51,6 @@ export interface ForecastErrorRow {
   id: string;
   stationId: string;
   stationName: string;
-  regionName: string;
   metric: MetricKey;
   forecastValue: number;
   actualValue: number;
@@ -71,7 +64,6 @@ export interface ParameterErrorRow {
   parameter: WeatherParameterKey;
   stationId: string;
   stationName: string;
-  regionName: string;
   forecastValue: number;
   actualValue: number;
   absoluteError: number;
@@ -97,7 +89,6 @@ export interface StationSeriesPoint {
 
 export interface HistoricalMetric {
   date: string;
-  regionName: string;
   stationName: string;
   mae: number;
   rmse: number;
@@ -116,7 +107,7 @@ export interface Alert {
 }
 
 export interface LoginRequest {
-  email: string;
+  login: string;
   password: string;
 }
 
@@ -128,7 +119,6 @@ export interface LoginResponse {
 export interface AnalyticsFilters {
   dateFrom: string;
   dateTo: string;
-  regionId: string;
   stationId: string;
   metric: MetricKey;
 }

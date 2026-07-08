@@ -24,8 +24,10 @@ export function UsersPage() {
             <thead>
               <tr>
                 <th>User</th>
+                <th>Login</th>
                 <th>Email</th>
                 <th>Current role</th>
+                <th>Status</th>
                 <th>Change role</th>
                 <th>Last seen</th>
               </tr>
@@ -34,8 +36,10 @@ export function UsersPage() {
               {data.map((user) => (
                 <tr key={user.id}>
                   <td>{user.name}</td>
+                  <td>{user.login}</td>
                   <td>{user.email}</td>
                   <td><RoleBadge role={user.role} /></td>
+                  <td>{user.isActive ? "Active" : "Inactive"}</td>
                   <td>
                     <select
                       value={user.role}

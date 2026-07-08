@@ -145,16 +145,17 @@ core-api/db/clickhouse/001_gold_views.sql
 
 Демо-логины:
 
-- `admin@weather.local` / `password`
-- `analyst@weather.local` / `password`
-- `operator@weather.local` / `password`
+- `admin` / `password`
+- `analyst` / `password`
+- `operator` / `password`
+- `viewer` / `password`
 
 Пример:
 
 ```bash
 TOKEN=$(curl -s http://localhost:8080/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"analyst@weather.local","password":"password"}' | jq -r .token)
+  -d '{"login":"analyst","password":"password"}' | jq -r .token)
 
 curl "http://localhost:8080/api/v1/analytics/worst-errors?dateFrom=2026-07-01&dateTo=2026-07-08&limit=10" \
   -H "Authorization: Bearer $TOKEN"
@@ -162,8 +163,8 @@ curl "http://localhost:8080/api/v1/analytics/worst-errors?dateFrom=2026-07-01&da
 
 ## Форматы данных
 
-Forecast поток сейчас считается записанным в PostgreSQL в таблицу `forecast_reading_models`.
-Actual weather приходит из Kafka topic `actual-weather.raw.v1`; Core API consumer декодирует JSON и сохраняет нормализованные значения в PostgreSQL.
+Forecast поток сейчас считается записанным в PostgreSQL в таблицу `forecasts`.
+Actual weather приходит из Kafka topic `actual-weather.raw.v1`; Core API consumer декодирует JSON и сохраняет нормализованные значения в PostgreSQL `archive`.
 Backfill jobs публикуются в Kafka topic `backfill.jobs.v1`, чтобы ETL/Data Processing service запускал перерасчёт Gold-витрин.
 
 Текущий JSON actual weather:
@@ -171,7 +172,7 @@ Backfill jobs публикуются в Kafka topic `backfill.jobs.v1`, чтоб
 ```json
 {
   "id": "sensor-event-1",
-  "stationId": "st-004",
+  "stationId": "1",
   "observedAt": "2026-07-08T06:00:00Z",
   "temperature": 29.3,
   "windSpeed": 12.1,

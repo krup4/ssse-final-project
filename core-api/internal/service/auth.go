@@ -16,9 +16,12 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func (s *Service) Login(ctx context.Context, email, password string) (string, domain.User, error) {
-	user, err := s.deps.Users.FindByEmail(ctx, email)
+func (s *Service) Login(ctx context.Context, login, password string) (string, domain.User, error) {
+	user, err := s.deps.Users.FindByLogin(ctx, login)
 	if err != nil {
+		return "", domain.User{}, domain.ErrInvalidCredentials
+	}
+	if !user.IsActive {
 		return "", domain.User{}, domain.ErrInvalidCredentials
 	}
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {

@@ -1,37 +1,43 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { SlidersHorizontal } from "lucide-react";
 import { weatherParameterLabels, weatherParameterUnits } from "../entities/labels";
 import type { WeatherParameterKey } from "../entities/types";
+import { useFilters } from "../features/filters/FiltersContext";
 import { api } from "../shared/api/endpoints";
-import { formatDateTime, formatNumber } from "../shared/lib/format";
+import { formatChartDate, formatDateTime, formatNumber } from "../shared/lib/format";
 import { Panel } from "../shared/ui/Panel";
 
-const parameterOptions: Array<WeatherParameterKey | "all"> = [
-  "all",
-  "temperature_min",
-  "temperature_max",
-  "precipitation_total",
-  "wind_speed",
-  "wind_gust",
-  "humidity",
-  "pressure"
-];
-
 function optionLabel(parameter: WeatherParameterKey | "all") {
-  return parameter === "all" ? "All parameters" : weatherParameterLabels[parameter];
+  return parameter === "all" ? "All parameters" : weatherParameterLabels[parameter] ?? parameter;
+}
+
+function unitLabel(parameter: WeatherParameterKey) {
+  return weatherParameterUnits[parameter] ?? "";
 }
 
 export function ParameterErrorsPage() {
   const [parameter, setParameter] = useState<WeatherParameterKey | "all">("all");
+  const { filters } = useFilters();
+  const { data: fields = [] } = useQuery({ queryKey: ["forecast-fields"], queryFn: api.forecastFields });
+  const parameterOptions = useMemo<Array<WeatherParameterKey | "all">>(
+    () => ["all", ...fields.map((field) => field.name)],
+    [fields]
+  );
+
+  useEffect(() => {
+    if (!parameterOptions.includes(parameter)) {
+      setParameter("all");
+    }
+  }, [parameter, parameterOptions]);
   const { data = [] } = useQuery({
-    queryKey: ["parameter-errors", parameter],
-    queryFn: () => api.parameterErrors(parameter)
+    queryKey: ["parameter-errors", parameter, filters],
+    queryFn: () => api.parameterErrors(parameter, filters)
   });
   const { data: trend = [] } = useQuery({
-    queryKey: ["parameter-error-trend", parameter],
-    queryFn: () => api.parameterErrorTrend(parameter)
+    queryKey: ["parameter-error-trend", parameter, filters],
+    queryFn: () => api.parameterErrorTrend(parameter, filters)
   });
 
   const summaryRows = useMemo(() => {
@@ -55,7 +61,7 @@ export function ParameterErrorsPage() {
     return [...groups.values()]
       .map((row) => ({
         ...row,
-        label: weatherParameterLabels[row.parameter],
+        label: optionLabel(row.parameter),
         avgError: row.count > 0 ? row.avgError / row.count : 0
       }))
       .sort((a, b) => b.contributionPct - a.contributionPct);
@@ -117,7 +123,7 @@ export function ParameterErrorsPage() {
         <section className="parameter-summary">
           <span>Worst parameter error</span>
           <strong>{worstRow ? formatNumber(worstRow.absoluteError) : "0"}</strong>
-          <p>{worstRow ? `${weatherParameterLabels[worstRow.parameter]} at ${worstRow.stationName}` : "No data"}</p>
+          <p>{worstRow ? `${optionLabel(worstRow.parameter)} at ${worstRow.stationName}` : "No data"}</p>
         </section>
         <section className="parameter-summary">
           <span>Rows in selection</span>
@@ -146,14 +152,14 @@ export function ParameterErrorsPage() {
           </div>
         </Panel>
 
-        <Panel title={parameter === "all" ? "Aggregate error trend" : `${weatherParameterLabels[parameter]} error trend`}>
+        <Panel title={parameter === "all" ? "Aggregate error trend" : `${optionLabel(parameter)} error trend`}>
           <div className="chart-tall">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trendRows}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ec" />
-                <XAxis dataKey="timestamp" tickLine={false} axisLine={false} />
+                <XAxis dataKey="timestamp" tickLine={false} axisLine={false} tickFormatter={formatChartDate} minTickGap={24} />
                 <YAxis tickLine={false} axisLine={false} />
-                <Tooltip />
+                <Tooltip labelFormatter={(value) => formatChartDate(String(value))} />
                 <Line type="monotone" dataKey="absoluteError" name="Max absolute error" stroke="#d64545" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="mae" name="MAE" stroke="#2f80ed" strokeWidth={2} dot={false} />
               </LineChart>
@@ -179,10 +185,10 @@ export function ParameterErrorsPage() {
               <tbody>
                 {data.map((row) => (
                   <tr key={row.id}>
-                    <td>{weatherParameterLabels[row.parameter]}</td>
+                    <td>{optionLabel(row.parameter)}</td>
                     <td>{row.stationName}</td>
-                    <td>{formatNumber(row.forecastValue)} {weatherParameterUnits[row.parameter]}</td>
-                    <td>{formatNumber(row.actualValue)} {weatherParameterUnits[row.parameter]}</td>
+                    <td>{formatNumber(row.forecastValue)} {unitLabel(row.parameter)}</td>
+                    <td>{formatNumber(row.actualValue)} {unitLabel(row.parameter)}</td>
                     <td><strong>{formatNumber(row.absoluteError)}</strong></td>
                     <td>{formatNumber(row.contributionPct)}%</td>
                   </tr>
@@ -199,7 +205,6 @@ export function ParameterErrorsPage() {
             <thead>
               <tr>
                 <th>Parameter</th>
-                <th>Region</th>
                 <th>Station</th>
                 <th>Forecast</th>
                 <th>Actual</th>
@@ -212,11 +217,10 @@ export function ParameterErrorsPage() {
             <tbody>
               {data.map((row) => (
                 <tr key={`detail-${row.id}`}>
-                  <td>{weatherParameterLabels[row.parameter]}</td>
-                  <td>{row.regionName}</td>
+                  <td>{optionLabel(row.parameter)}</td>
                   <td>{row.stationName}</td>
-                  <td>{formatNumber(row.forecastValue)} {weatherParameterUnits[row.parameter]}</td>
-                  <td>{formatNumber(row.actualValue)} {weatherParameterUnits[row.parameter]}</td>
+                  <td>{formatNumber(row.forecastValue)} {unitLabel(row.parameter)}</td>
+                  <td>{formatNumber(row.actualValue)} {unitLabel(row.parameter)}</td>
                   <td><strong>{formatNumber(row.absoluteError)}</strong></td>
                   <td>{formatNumber(row.errorPct)}%</td>
                   <td>{row.samples.toLocaleString("en")}</td>

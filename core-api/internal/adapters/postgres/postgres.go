@@ -25,14 +25,15 @@ type Options struct {
 }
 
 type Repositories struct {
-	db            *gorm.DB
-	Users         *UserRepository
-	Regions       *RegionRepository
-	Stations      *StationRepository
-	Analytics     *AnalyticsRepository
-	Alerts        *AlertRepository
-	Backfills     *BackfillRepository
-	ActualWeather *ActualWeatherRepository
+	db             *gorm.DB
+	Users          *UserRepository
+	Regions        *RegionRepository
+	ForecastFields *ForecastFieldRepository
+	Stations       *StationRepository
+	Analytics      *AnalyticsRepository
+	Alerts         *AlertRepository
+	Backfills      *BackfillRepository
+	ActualWeather  *ActualWeatherRepository
 }
 
 func Open(ctx context.Context, options Options) (*gorm.DB, error) {
@@ -67,14 +68,15 @@ func Open(ctx context.Context, options Options) (*gorm.DB, error) {
 
 func NewRepositories(db *gorm.DB) *Repositories {
 	return &Repositories{
-		db:            db,
-		Users:         &UserRepository{db: db},
-		Regions:       &RegionRepository{db: db},
-		Stations:      &StationRepository{db: db},
-		Analytics:     &AnalyticsRepository{db: db},
-		Alerts:        &AlertRepository{db: db},
-		Backfills:     &BackfillRepository{db: db},
-		ActualWeather: &ActualWeatherRepository{db: db},
+		db:             db,
+		Users:          &UserRepository{db: db},
+		Regions:        &RegionRepository{db: db},
+		ForecastFields: &ForecastFieldRepository{db: db},
+		Stations:       &StationRepository{db: db},
+		Analytics:      &AnalyticsRepository{db: db},
+		Alerts:         &AlertRepository{db: db},
+		Backfills:      &BackfillRepository{db: db},
+		ActualWeather:  &ActualWeatherRepository{db: db},
 	}
 }
 
@@ -127,11 +129,13 @@ func configurePool(db *sql.DB, options Options) {
 
 func (r *Repositories) Migrate(ctx context.Context) error {
 	return r.db.WithContext(ctx).AutoMigrate(
+		&RoleModel{},
 		&UserModel{},
-		&RegionModel{},
+		&ForecastFieldModel{},
 		&StationModel{},
-		&ForecastReadingModel{},
-		&ActualWeatherReadingModel{},
+		&ForecastModel{},
+		&MetricModel{},
+		&ArchiveModel{},
 		&AlertModel{},
 		&BackfillJobModel{},
 	)
@@ -150,29 +154,30 @@ func (r *Repositories) SeedDemoData(ctx context.Context) error {
 		return err
 	}
 	now := time.Now().UTC()
-	users := []UserModel{
-		{ID: "u-1", Name: "Ada Admin", Email: "admin@weather.local", PasswordHash: string(hash), Role: "admin", LastSeen: now},
-		{ID: "u-2", Name: "Alex Analyst", Email: "analyst@weather.local", PasswordHash: string(hash), Role: "analyst", LastSeen: now},
-		{ID: "u-3", Name: "Olga Operator", Email: "operator@weather.local", PasswordHash: string(hash), Role: "operator", LastSeen: now},
+	roles := []RoleModel{{Name: "admin"}, {Name: "analyst"}, {Name: "operator"}, {Name: "viewer"}}
+	roleByName := map[string]int{}
+	for i := range roles {
+		if err := r.db.WithContext(ctx).Where("name = ?", roles[i].Name).FirstOrCreate(&roles[i]).Error; err != nil {
+			return err
+		}
+		roleByName[roles[i].Name] = roles[i].ID
 	}
-	regions := []RegionModel{
-		{ID: "central", Name: "Central District"},
-		{ID: "north", Name: "Northern District"},
-		{ID: "south", Name: "Southern District"},
+	users := []UserModel{
+		{Login: "admin", Name: "Ada Admin", Email: "admin@weather.local", PasswordHash: string(hash), RoleID: roleByName["admin"], IsActive: true, LastSeen: now},
+		{Login: "analyst", Name: "Alex Analyst", Email: "analyst@weather.local", PasswordHash: string(hash), RoleID: roleByName["analyst"], IsActive: true, LastSeen: now},
+		{Login: "operator", Name: "Olga Operator", Email: "operator@weather.local", PasswordHash: string(hash), RoleID: roleByName["operator"], IsActive: true, LastSeen: now},
+		{Login: "viewer", Name: "Vera Viewer", Email: "viewer@weather.local", PasswordHash: string(hash), RoleID: roleByName["viewer"], IsActive: true, LastSeen: now},
 	}
 	stations := []StationModel{
-		{ID: "st-004", Name: "Ryazan Field", RegionID: "central", Lat: 54.626, Lon: 39.735, Status: "online", ActiveSensors: 8, LastTelemetryAt: now.Add(-10 * time.Minute)},
-		{ID: "st-006", Name: "Caspian Steppe", RegionID: "south", Lat: 46.349, Lon: 48.041, Status: "degraded", ActiveSensors: 5, LastTelemetryAt: now.Add(-35 * time.Minute)},
-		{ID: "st-011", Name: "Murmansk Port", RegionID: "north", Lat: 68.958, Lon: 33.082, Status: "offline", ActiveSensors: 0, LastTelemetryAt: now.Add(-6 * time.Hour)},
+		{ID: 1, Name: "Ryazan Field", Lat: 54.626, Lon: 39.735, IsActive: true},
+		{ID: 2, Name: "Caspian Steppe", Lat: 46.349, Lon: 48.041, IsActive: true},
+		{ID: 3, Name: "Murmansk Port", Lat: 68.958, Lon: 33.082, IsActive: false},
 	}
 	alerts := []AlertModel{
 		{ID: "a-1", Title: "Kafka lag above SLO", Source: "Telemetry Receiver", Severity: "warning", Status: "open", StartedAt: now.Add(-40 * time.Minute), UpdatedAt: now.Add(-5 * time.Minute)},
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&users).Error; err != nil {
-			return err
-		}
-		if err := tx.Create(&regions).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&stations).Error; err != nil {
@@ -187,29 +192,36 @@ func (r *Repositories) SeedDemoData(ctx context.Context) error {
 
 func seedReadings(tx *gorm.DB, now time.Time) error {
 	metrics := []string{"temperature", "wind_speed", "humidity", "pressure", "precipitation"}
-	stations := []string{"st-004", "st-006", "st-011"}
+	stations := []int{1, 2, 3}
+	fieldByName := map[string]ForecastFieldModel{}
+	metricByName := map[string]MetricModel{}
+	for _, name := range append(metrics, "wind_gust") {
+		field := ForecastFieldModel{Name: name}
+		if err := tx.Where("name = ?", name).FirstOrCreate(&field).Error; err != nil {
+			return err
+		}
+		fieldByName[name] = field
+		metric := MetricModel{ForecastFieldID: field.ID, Name: name}
+		if err := tx.Where("forecast_field_id = ? and name = ?", field.ID, name).FirstOrCreate(&metric).Error; err != nil {
+			return err
+		}
+		metricByName[name] = metric
+	}
 	for h := 0; h < 36; h++ {
 		ts := now.Truncate(time.Hour).Add(time.Duration(-h) * time.Hour)
 		for _, station := range stations {
 			for i, metric := range metrics {
 				forecast := 10 + float64(i*7) + float64(h%5)
 				actual := forecast + float64((h+i)%9-4)
-				fr := ForecastReadingModel{
-					ID:         station + "-" + metric + "-" + ts.Format("2006010215"),
+				fr := ForecastModel{
 					StationID:  station,
-					Metric:     metric,
+					FieldID:    fieldByName[metric].ID,
 					Value:      forecast,
-					ForecastAt: ts.Add(-6 * time.Hour),
-					TargetAt:   ts,
-					Source:     "demo-forecast-api",
+					Date:       ts,
+					Interval:   "6h",
+					IsArchived: h > 5,
 				}
-				ar := ActualWeatherReadingModel{
-					ID:         station + "-actual-" + metric + "-" + ts.Format("2006010215"),
-					StationID:  station,
-					ObservedAt: ts,
-					Source:     "demo-sensor",
-				}
-				setActualMetric(&ar, metric, actual)
+				ar := ArchiveModel{StationID: station, MetricID: metricByName[metric].ID, Dt: ts, Value: actual}
 				if err := tx.Create(&fr).Error; err != nil && !isDuplicate(err) {
 					return err
 				}

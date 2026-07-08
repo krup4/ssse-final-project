@@ -33,6 +33,7 @@ func (h *Handler) registerAPIRoutes(api *gin.RouterGroup) {
 	protected.GET("/auth/me", h.me)
 
 	protected.GET("/regions", h.regions)
+	protected.GET("/forecast-fields", h.forecastFields)
 	protected.GET("/stations", h.stations)
 
 	protected.GET("/metrics/overview", h.overview)

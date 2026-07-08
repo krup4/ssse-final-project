@@ -16,7 +16,6 @@ func (r *BackfillRepository) Create(ctx context.Context, request domain.Backfill
 		Status:             string(domain.BackfillQueued),
 		DateFrom:           request.DateFrom,
 		DateTo:             request.DateTo,
-		RegionID:           request.RegionID,
 		StationID:          request.StationID,
 		Metric:             string(request.Metric),
 		CalculationVersion: request.CalculationVersion,
@@ -37,7 +36,6 @@ func (r *BackfillRepository) HasActiveConflict(ctx context.Context, request doma
 	err := r.db.WithContext(ctx).Model(&BackfillJobModel{}).
 		Where("status in ?", []string{"queued", "running"}).
 		Where("date_from <= ? and date_to >= ?", request.DateTo, request.DateFrom).
-		Where("(region_id = ? or region_id = '' or ? = '')", request.RegionID, request.RegionID).
 		Where("(station_id = ? or station_id = '' or ? = '')", request.StationID, request.StationID).
 		Count(&count).Error
 	return count > 0, err

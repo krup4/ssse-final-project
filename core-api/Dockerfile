@@ -9,15 +9,14 @@ COPY . .
 
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/core-api ./cmd/core-api
 
-FROM alpine:3.22 AS runner
-
-RUN apk add --no-cache ca-certificates tzdata && adduser -D -H -u 10001 app
+FROM scratch AS runner
 
 WORKDIR /app
 
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /out/core-api /app/core-api
 
-USER app
+USER 10001:10001
 
 EXPOSE 8080
 

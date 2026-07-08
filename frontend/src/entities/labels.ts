@@ -16,9 +16,9 @@ export const metricUnits: Record<MetricKey, string> = {
   precipitation: "mm"
 };
 
-export const weatherParameterLabels: Record<WeatherParameterKey, string> = {
-  temperature_min: "Minimum temperature",
-  temperature_max: "Maximum temperature",
+export const weatherParameterLabels: Record<string, string> = {
+  temperature: "Temperature",
+  precipitation: "Precipitation",
   precipitation_total: "Precipitation",
   wind_speed: "Wind speed",
   wind_gust: "Wind gust",
@@ -26,9 +26,9 @@ export const weatherParameterLabels: Record<WeatherParameterKey, string> = {
   pressure: "Pressure"
 };
 
-export const weatherParameterUnits: Record<WeatherParameterKey, string> = {
-  temperature_min: "C",
-  temperature_max: "C",
+export const weatherParameterUnits: Record<string, string> = {
+  temperature: "C",
+  precipitation: "mm",
   precipitation_total: "mm",
   wind_speed: "m/s",
   wind_gust: "m/s",

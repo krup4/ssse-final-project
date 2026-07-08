@@ -8,9 +8,11 @@ import (
 
 type userResponse struct {
 	ID       string          `json:"id"`
+	Login    string          `json:"login"`
 	Name     string          `json:"name"`
 	Email    string          `json:"email"`
 	Role     domain.UserRole `json:"role"`
+	IsActive bool            `json:"isActive"`
 	LastSeen time.Time       `json:"lastSeen"`
 }
 
@@ -20,6 +22,11 @@ type loginResponse struct {
 }
 
 type regionResponse struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type forecastFieldResponse struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
@@ -130,9 +137,11 @@ type backfillJobResponse struct {
 func toUserResponse(user domain.User) userResponse {
 	return userResponse{
 		ID:       user.ID,
+		Login:    user.Login,
 		Name:     user.Name,
 		Email:    user.Email,
 		Role:     user.Role,
+		IsActive: user.IsActive,
 		LastSeen: user.LastSeen,
 	}
 }
@@ -149,6 +158,14 @@ func toRegionResponses(regions []domain.Region) []regionResponse {
 	out := make([]regionResponse, 0, len(regions))
 	for _, region := range regions {
 		out = append(out, regionResponse{ID: region.ID, Name: region.Name})
+	}
+	return out
+}
+
+func toForecastFieldResponses(fields []domain.ForecastField) []forecastFieldResponse {
+	out := make([]forecastFieldResponse, 0, len(fields))
+	for _, field := range fields {
+		out = append(out, forecastFieldResponse{ID: field.ID, Name: field.Name})
 	}
 	return out
 }

@@ -1,4 +1,16 @@
+.gocache/
+.gomodcache/
+
+.DS_Store
+
+bin/
+dist/
+tmp/
+
+*.log
+
 .env
 .env.local
 .env.*.local
 openapi.yml
+docker-compose.yml

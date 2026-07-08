@@ -4,12 +4,17 @@ import (
 	"context"
 	"math"
 	"sort"
+	"strconv"
 	"time"
+
+	"gorm.io/gorm"
 
 	"weather-accuracy/core-api/internal/domain"
 )
 
 type forecastActualRow struct {
+	ForecastID    int
+	MetricID      int
 	ID            string
 	StationID     string
 	StationName   string
@@ -20,7 +25,17 @@ type forecastActualRow struct {
 	ObservedAt    time.Time
 }
 
+type archiveCalculation struct {
+	ForecastID  int
+	StationID   int
+	MetricID    int
+	ObservedAt  time.Time
+	ActualValue float64
+}
+
 type parameterActualRow struct {
+	ForecastID    int
+	MetricID      int
 	ID            string
 	Parameter     string
 	StationID     string
@@ -59,28 +74,32 @@ func (a errorAccumulator) rmse() float64 {
 
 func (r *AnalyticsRepository) Overview(ctx context.Context, filter domain.AnalyticsFilter) (domain.OverviewMetrics, error) {
 	var overview domain.OverviewMetrics
-	var active, degraded, offline int64
-	_ = r.db.WithContext(ctx).Model(&StationModel{}).Where("status = ?", "online").Count(&active).Error
-	_ = r.db.WithContext(ctx).Model(&StationModel{}).Where("status = ?", "degraded").Count(&degraded).Error
-	_ = r.db.WithContext(ctx).Model(&StationModel{}).Where("status = ?", "offline").Count(&offline).Error
+	var active, inactive int64
+	_ = r.db.WithContext(ctx).Model(&StationModel{}).Where("is_active = true").Count(&active).Error
+	_ = r.db.WithContext(ctx).Model(&StationModel{}).Where("is_active = false").Count(&inactive).Error
 	overview.ActiveStations = int(active)
-	overview.DegradedStations = int(degraded)
-	overview.OfflineStations = int(offline)
+	overview.DegradedStations = 0
+	overview.OfflineStations = int(inactive)
 	overview.RequestRate = 0
 	overview.P95LatencyMs = 0
 	overview.KafkaLag = 0
 
-	rows, err := r.forecastErrorRows(ctx, filter)
+	currentRows, err := r.forecastErrorRows(ctx, filter, true)
 	if err != nil {
 		return overview, err
 	}
-	sortForecastErrors(rows, "absoluteError_desc")
-	if len(rows) > 0 {
-		overview.WorstErrorToday = rows[0].AbsoluteError
+	sortForecastErrors(currentRows, "absoluteError_desc")
+	if len(currentRows) > 0 {
+		overview.WorstErrorToday = currentRows[0].AbsoluteError
+	}
+
+	trendRows, err := r.forecastErrorRows(ctx, filter, false)
+	if err != nil {
+		return overview, err
 	}
 
 	byDate := map[string]*errorAccumulator{}
-	for _, row := range rows {
+	for _, row := range trendRows {
 		date := row.ObservedAt.Format("2006-01-02")
 		acc := byDate[date]
 		if acc == nil {
@@ -107,7 +126,7 @@ func (r *AnalyticsRepository) Overview(ctx context.Context, filter domain.Analyt
 }
 
 func (r *AnalyticsRepository) WorstErrors(ctx context.Context, filter domain.AnalyticsFilter, limit int, sortOrder string) ([]domain.ForecastErrorRow, error) {
-	rows, err := r.forecastErrorRows(ctx, filter)
+	rows, err := r.forecastErrorRows(ctx, filter, true)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +138,7 @@ func (r *AnalyticsRepository) WorstErrors(ctx context.Context, filter domain.Ana
 }
 
 func (r *AnalyticsRepository) ParameterErrors(ctx context.Context, filter domain.ParameterFilter) ([]domain.ParameterErrorRow, error) {
-	rows, err := r.parameterErrorRows(ctx, filter)
+	rows, err := r.parameterErrorRows(ctx, filter, true)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +162,7 @@ func (r *AnalyticsRepository) ParameterErrors(ctx context.Context, filter domain
 }
 
 func (r *AnalyticsRepository) ParameterTrend(ctx context.Context, filter domain.ParameterFilter) ([]domain.ParameterErrorTrendPoint, error) {
-	rows, err := r.parameterErrorRows(ctx, filter)
+	rows, err := r.parameterErrorRows(ctx, filter, false)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +211,7 @@ func (r *AnalyticsRepository) ParameterTrend(ctx context.Context, filter domain.
 }
 
 func (r *AnalyticsRepository) StationSeries(ctx context.Context, filter domain.AnalyticsFilter, bucket domain.TimeBucket) ([]domain.StationSeriesPoint, error) {
-	rows, err := r.forecastErrorRows(ctx, filter)
+	rows, err := r.forecastErrorRows(ctx, filter, false)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +256,7 @@ func (r *AnalyticsRepository) StationSeries(ctx context.Context, filter domain.A
 }
 
 func (r *AnalyticsRepository) History(ctx context.Context, filter domain.AnalyticsFilter) ([]domain.HistoricalMetric, error) {
-	rows, err := r.forecastErrorRows(ctx, filter)
+	rows, err := r.forecastErrorRows(ctx, filter, false)
 	if err != nil {
 		return nil, err
 	}
@@ -286,15 +305,32 @@ func (r *AnalyticsRepository) History(ctx context.Context, filter domain.Analyti
 	return out, nil
 }
 
-func (r *AnalyticsRepository) forecastErrorRows(ctx context.Context, filter domain.AnalyticsFilter) ([]domain.ForecastErrorRow, error) {
+func (r *AnalyticsRepository) forecastErrorRows(ctx context.Context, filter domain.AnalyticsFilter, currentOnly bool) ([]domain.ForecastErrorRow, error) {
 	var raw []forecastActualRow
-	err := r.db.WithContext(ctx).Raw(baseForecastActualSQL(), sqlArgs(filter)...).Scan(&raw).Error
+	err := r.db.WithContext(ctx).Raw(baseForecastActualSQL(currentOnly), sqlArgs(filter)...).Scan(&raw).Error
 	if err != nil {
 		return nil, err
 	}
+	usedFallback := false
+	if currentOnly && len(raw) == 0 {
+		err = r.db.WithContext(ctx).Raw(baseForecastActualSQL(false), sqlArgs(filter)...).Scan(&raw).Error
+		if err != nil {
+			return nil, err
+		}
+		usedFallback = true
+	}
 	rows := make([]domain.ForecastErrorRow, 0, len(raw))
+	calculations := make([]archiveCalculation, 0, len(raw))
 	for _, row := range raw {
 		absoluteError, errorPct := calculateError(row.ForecastValue, row.ActualValue)
+		stationID, _ := strconv.Atoi(row.StationID)
+		calculations = append(calculations, archiveCalculation{
+			ForecastID:  row.ForecastID,
+			StationID:   stationID,
+			MetricID:    row.MetricID,
+			ObservedAt:  row.ObservedAt,
+			ActualValue: row.ActualValue,
+		})
 		rows = append(rows, domain.ForecastErrorRow{
 			ID:            row.ID,
 			StationID:     row.StationID,
@@ -308,18 +344,40 @@ func (r *AnalyticsRepository) forecastErrorRows(ctx context.Context, filter doma
 			ObservedAt:    row.ObservedAt,
 		})
 	}
+	if currentOnly && !usedFallback && len(calculations) > 0 {
+		if err := r.archiveCalculations(ctx, calculations); err != nil {
+			return nil, err
+		}
+	}
 	return rows, nil
 }
 
-func (r *AnalyticsRepository) parameterErrorRows(ctx context.Context, filter domain.ParameterFilter) ([]domain.ParameterErrorRow, error) {
+func (r *AnalyticsRepository) parameterErrorRows(ctx context.Context, filter domain.ParameterFilter, currentOnly bool) ([]domain.ParameterErrorRow, error) {
 	var raw []parameterActualRow
-	err := r.db.WithContext(ctx).Raw(baseParameterActualSQL(filter.Parameter), parameterArgs(filter)...).Scan(&raw).Error
+	err := r.db.WithContext(ctx).Raw(baseParameterActualSQL(filter.Parameter, currentOnly), parameterArgs(filter)...).Scan(&raw).Error
 	if err != nil {
 		return nil, err
 	}
+	usedFallback := false
+	if currentOnly && len(raw) == 0 {
+		err = r.db.WithContext(ctx).Raw(baseParameterActualSQL(filter.Parameter, false), parameterArgs(filter)...).Scan(&raw).Error
+		if err != nil {
+			return nil, err
+		}
+		usedFallback = true
+	}
 	rows := make([]domain.ParameterErrorRow, 0, len(raw))
+	calculations := make([]archiveCalculation, 0, len(raw))
 	for _, row := range raw {
 		absoluteError, errorPct := calculateError(row.ForecastValue, row.ActualValue)
+		stationID, _ := strconv.Atoi(row.StationID)
+		calculations = append(calculations, archiveCalculation{
+			ForecastID:  row.ForecastID,
+			StationID:   stationID,
+			MetricID:    row.MetricID,
+			ObservedAt:  row.ObservedAt,
+			ActualValue: row.ActualValue,
+		})
 		rows = append(rows, domain.ParameterErrorRow{
 			ID:            row.ID,
 			Parameter:     domain.WeatherParameter(row.Parameter),
@@ -333,7 +391,48 @@ func (r *AnalyticsRepository) parameterErrorRows(ctx context.Context, filter dom
 			ObservedAt:    row.ObservedAt,
 		})
 	}
+	if currentOnly && !usedFallback && len(calculations) > 0 {
+		if err := r.archiveCalculations(ctx, calculations); err != nil {
+			return nil, err
+		}
+	}
 	return rows, nil
+}
+
+func (r *AnalyticsRepository) archiveCalculations(ctx context.Context, calculations []archiveCalculation) error {
+	forecastIDs := make([]int, 0, len(calculations))
+	seenForecasts := map[int]struct{}{}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, calc := range calculations {
+			model := ArchiveModel{
+				StationID: calc.StationID,
+				MetricID:  calc.MetricID,
+				Dt:        calc.ObservedAt,
+				Value:     calc.ActualValue,
+			}
+			err := tx.Exec(`
+				insert into archive (dt, station_id, metric_id, value)
+				values (?, ?, ?, ?)
+				on conflict (station_id, metric_id, dt) do update
+				set value = excluded.value`,
+				model.Dt,
+				model.StationID,
+				model.MetricID,
+				model.Value,
+			).Error
+			if err != nil {
+				return err
+			}
+			if _, ok := seenForecasts[calc.ForecastID]; !ok {
+				seenForecasts[calc.ForecastID] = struct{}{}
+				forecastIDs = append(forecastIDs, calc.ForecastID)
+			}
+		}
+		if len(forecastIDs) == 0 {
+			return nil
+		}
+		return tx.Model(&ForecastModel{}).Where("id in ?", forecastIDs).Update("is_archived", true).Error
+	})
 }
 
 func calculateError(forecastValue, actualValue float64) (absoluteError float64, errorPct float64) {

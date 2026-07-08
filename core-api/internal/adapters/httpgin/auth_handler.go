@@ -8,7 +8,7 @@ import (
 )
 
 type loginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
+	Login    string `json:"login" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
 
@@ -18,7 +18,7 @@ func (h *Handler) login(c *gin.Context) {
 		validation(c, "invalid login payload")
 		return
 	}
-	token, user, err := h.svc.Login(c.Request.Context(), strings.ToLower(req.Email), req.Password)
+	token, user, err := h.svc.Login(c.Request.Context(), strings.ToLower(req.Login), req.Password)
 	if err != nil {
 		unauthorized(c)
 		return

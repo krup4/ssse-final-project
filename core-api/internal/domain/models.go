@@ -68,14 +68,21 @@ const (
 
 type User struct {
 	ID           string    `json:"id"`
+	Login        string    `json:"login"`
 	Name         string    `json:"name"`
 	Email        string    `json:"email"`
 	Role         UserRole  `json:"role"`
+	IsActive     bool      `json:"isActive"`
 	LastSeen     time.Time `json:"lastSeen"`
 	PasswordHash string    `json:"-"`
 }
 
 type Region struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type ForecastField struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }

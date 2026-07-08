@@ -3,23 +3,23 @@ import { CloudSun, KeyRound } from "lucide-react";
 import { useAuth } from "../features/auth/AuthContext";
 
 const demoAccounts = [
-  "admin@weather.local",
-  "analyst@weather.local",
-  "operator@weather.local",
-  "viewer@weather.local"
+  "admin",
+  "analyst",
+  "operator",
+  "viewer"
 ];
 
 export function LoginPage() {
   const { login } = useAuth();
-  const [email, setEmail] = useState(demoAccounts[0]);
-  const [password, setPassword] = useState("demo");
+  const [loginName, setLoginName] = useState(demoAccounts[0]);
+  const [password, setPassword] = useState("password");
   const [isLoading, setIsLoading] = useState(false);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
     try {
-      await login({ email, password });
+      await login({ login: loginName, password });
     } finally {
       setIsLoading(false);
     }
@@ -52,7 +52,7 @@ export function LoginPage() {
           <form onSubmit={onSubmit}>
             <label>
               Account
-              <select value={email} onChange={(event) => setEmail(event.target.value)}>
+              <select value={loginName} onChange={(event) => setLoginName(event.target.value)}>
                 {demoAccounts.map((account) => (
                   <option key={account} value={account}>
                     {account}

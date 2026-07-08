@@ -2,81 +2,66 @@ package postgres
 
 import "weather-accuracy/core-api/internal/domain"
 
-func baseForecastActualSQL() string {
-	return `
-		select concat(f.id, '-', f.metric) as id,
-		       f.station_id,
-		       s.name as station_name,
-		       r.name as region_name,
-		       f.metric,
-		       f.value as forecast_value,
-		       case f.metric
-		         when 'temperature' then a.temperature
-		         when 'wind_speed' then a.wind_speed
-		         when 'humidity' then a.humidity
-		         when 'pressure' then a.pressure
-		         when 'precipitation' then a.precipitation_total
-		       end as actual_value,
-		       a.observed_at
-		from forecast_reading_models f
-		join actual_weather_reading_models a on a.station_id = f.station_id and a.observed_at = f.target_at
-		join station_models s on s.id = f.station_id
-		join region_models r on r.id = s.region_id
-		where f.target_at >= ? and f.target_at <= ?
-		  and (? = '' or ? = 'all' or s.region_id = ?)
-		  and (? = '' or ? = 'all' or f.station_id = ?)
-		  and (? = '' or f.metric = ?)
-		  and case f.metric
-		         when 'temperature' then a.temperature
-		         when 'wind_speed' then a.wind_speed
-		         when 'humidity' then a.humidity
-		         when 'pressure' then a.pressure
-		         when 'precipitation' then a.precipitation_total
-			      end is not null`
-}
-
-func baseParameterActualSQL(parameter string) string {
-	filter := ""
-	if parameter != "" && parameter != "all" {
-		filter = " and p.parameter = ?"
+func baseForecastActualSQL(currentOnly bool) string {
+	currentFilter := ""
+	if currentOnly {
+		currentFilter = " and f.is_archived = false"
 	}
 	return `
-		select concat(f.id, '-', p.parameter) as id,
-		       p.parameter,
-		       f.station_id,
+		select f.id as forecast_id,
+		       m.id as metric_id,
+		       concat(f.id::text, '-', m.id::text) as id,
+		       f.station_id::text as station_id,
 		       s.name as station_name,
-		       r.name as region_name,
+		       '' as region_name,
+		       ff.name as metric,
 		       f.value as forecast_value,
-		       p.actual_value,
-		       a.observed_at
-		from forecast_reading_models f
-		join actual_weather_reading_models a on a.station_id = f.station_id and a.observed_at = f.target_at
-		join station_models s on s.id = f.station_id
-		join region_models r on r.id = s.region_id
-		join lateral (
-			values
-			  ('temperature', a.temperature),
-			  ('precipitation_total', a.precipitation_total),
-			  ('wind_speed', a.wind_speed),
-			  ('wind_gust', a.wind_gust),
-			  ('humidity', a.humidity),
-			  ('pressure', a.pressure)
-		) as p(parameter, actual_value) on p.actual_value is not null
-		where f.target_at >= ? and f.target_at <= ?
-		  and (? = '' or ? = 'all' or s.region_id = ?)
-		  and (? = '' or ? = 'all' or f.station_id = ?)
-		  and f.metric = case
-		     when p.parameter = 'temperature' then 'temperature'
-		     when p.parameter = 'precipitation_total' then 'precipitation'
-		     else p.parameter
-		  end` + filter
+		       a.value as actual_value,
+		       a.dt as observed_at
+		from forecasts f
+		join stations s on s.id = f.station_id and s.is_active = true
+		join forecast_fields ff on ff.id = f.field_id
+		join metrics m on m.forecast_field_id = ff.id
+		join archive a on a.station_id = f.station_id and a.metric_id = m.id and a.dt = f.date
+		where f.date >= ? and f.date <= ?
+		  and (? = '' or ? = 'all' or f.station_id::text = ?)
+		  and (? = '' or ff.name = ?)` + currentFilter
+}
+
+func baseParameterActualSQL(parameter string, currentOnly bool) string {
+	parameter = normalizeParameterName(parameter)
+	filter := ""
+	if parameter != "" && parameter != "all" {
+		filter = " and m.name = ?"
+	}
+	currentFilter := ""
+	if currentOnly {
+		currentFilter = " and f.is_archived = false"
+	}
+	return `
+		select f.id as forecast_id,
+		       m.id as metric_id,
+		       concat(f.id::text, '-', m.id::text) as id,
+		       m.name as parameter,
+		       f.station_id::text as station_id,
+		       s.name as station_name,
+		       '' as region_name,
+		       f.value as forecast_value,
+		       a.value as actual_value,
+		       a.dt as observed_at
+		from forecasts f
+		join stations s on s.id = f.station_id and s.is_active = true
+		join forecast_fields ff on ff.id = f.field_id
+		join metrics m on m.forecast_field_id = ff.id
+		join archive a on a.station_id = f.station_id and a.metric_id = m.id and a.dt = f.date
+		where f.date >= ? and f.date <= ?
+		  and (? = '' or ? = 'all' or f.station_id::text = ?)` + currentFilter + filter
 }
 
 func sqlArgs(filter domain.AnalyticsFilter) []any {
 	return []any{
 		filter.DateFrom,
 		filter.DateTo,
-		filter.RegionID, filter.RegionID, filter.RegionID,
 		filter.StationID, filter.StationID, filter.StationID,
 		string(filter.Metric), string(filter.Metric),
 	}
@@ -86,11 +71,17 @@ func parameterArgs(filter domain.ParameterFilter) []any {
 	args := []any{
 		filter.DateFrom,
 		filter.DateTo,
-		filter.RegionID, filter.RegionID, filter.RegionID,
 		filter.StationID, filter.StationID, filter.StationID,
 	}
 	if filter.Parameter != "" && filter.Parameter != "all" {
-		args = append(args, filter.Parameter)
+		args = append(args, normalizeParameterName(filter.Parameter))
 	}
 	return args
+}
+
+func normalizeParameterName(parameter string) string {
+	if parameter == "precipitation_total" {
+		return "precipitation"
+	}
+	return parameter
 }

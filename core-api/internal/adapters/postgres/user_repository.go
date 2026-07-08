@@ -11,21 +11,21 @@ import (
 	"weather-accuracy/core-api/internal/domain"
 )
 
-func (r *UserRepository) FindByEmail(ctx context.Context, email string) (domain.User, error) {
+func (r *UserRepository) FindByLogin(ctx context.Context, login string) (domain.User, error) {
 	var model UserModel
-	err := r.db.WithContext(ctx).Where("email = ?", strings.ToLower(email)).First(&model).Error
+	err := r.db.WithContext(ctx).Preload("Role").Where("login = ?", strings.ToLower(login)).First(&model).Error
 	return toUser(model), mapError(err)
 }
 
 func (r *UserRepository) FindByID(ctx context.Context, id string) (domain.User, error) {
 	var model UserModel
-	err := r.db.WithContext(ctx).First(&model, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("Role").First(&model, "id = ?", id).Error
 	return toUser(model), mapError(err)
 }
 
 func (r *UserRepository) List(ctx context.Context) ([]domain.User, error) {
 	var models []UserModel
-	if err := r.db.WithContext(ctx).Order("email").Find(&models).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Role").Order("login").Find(&models).Error; err != nil {
 		return nil, err
 	}
 	out := make([]domain.User, 0, len(models))
@@ -38,11 +38,19 @@ func (r *UserRepository) List(ctx context.Context) ([]domain.User, error) {
 func (r *UserRepository) UpdateRole(ctx context.Context, id string, role domain.UserRole) (domain.User, error) {
 	var model UserModel
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&model, "id = ?", id).Error; err != nil {
+		var roleModel RoleModel
+		if err := tx.First(&roleModel, "name = ?", string(role)).Error; err != nil {
 			return err
 		}
-		model.Role = string(role)
-		return tx.Save(&model).Error
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("Role").First(&model, "id = ?", id).Error; err != nil {
+			return err
+		}
+		model.RoleID = roleModel.ID
+		if err := tx.Save(&model).Error; err != nil {
+			return err
+		}
+		model.Role = roleModel
+		return nil
 	})
 	return toUser(model), mapError(err)
 }

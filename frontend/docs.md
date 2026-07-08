@@ -13,12 +13,13 @@ npm run dev
 
 Demo accounts:
 
-- `admin@weather.local`
-- `analyst@weather.local`
-- `operator@weather.local`
-- `viewer@weather.local`
+- `admin`
+- `analyst`
+- `operator`
+- `viewer`
 
-Password can be any non-empty value in mock mode.
+Password is `password` for the real local Core API. In mock mode, any
+non-empty value is accepted.
 
 ## Docker
 
@@ -40,7 +41,11 @@ Build and run:
 docker compose up --build
 ```
 
-Frontend will be available at `http://localhost:3000`.
+Frontend will be available at `http://localhost:3000`; API calls to `/api/v1`
+are proxied to `core-api`.
+
+Optional local-only demo data and Kafka telemetry scripts are documented in
+`dev/README.md`. Do not run those scripts for production deploys.
 
 The station map uses Yandex Maps JavaScript API. Because this is a Vite static
 frontend, `VITE_*` values are embedded during Docker image build. Rebuild the

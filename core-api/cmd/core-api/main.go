@@ -130,6 +130,7 @@ func main() {
 	services := service.New(service.Dependencies{
 		Users:             repos.Users,
 		Regions:           repos.Regions,
+		ForecastFields:    repos.ForecastFields,
 		Stations:          repos.Stations,
 		Analytics:         analyticsRepo,
 		Alerts:            repos.Alerts,

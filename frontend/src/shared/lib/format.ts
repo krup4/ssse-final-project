@@ -7,6 +7,13 @@ export function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+export function formatChartDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "2-digit"
+  }).format(new Date(value));
+}
+
 export function formatNumber(value: number) {
   return new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value);
 }

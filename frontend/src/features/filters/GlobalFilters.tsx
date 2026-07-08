@@ -8,10 +8,7 @@ const metricOptions: MetricKey[] = ["temperature", "wind_speed", "humidity", "pr
 
 export function GlobalFilters() {
   const { filters, setFilters } = useFilters();
-  const { data: regions = [] } = useQuery({ queryKey: ["regions"], queryFn: api.regions });
   const { data: stations = [] } = useQuery({ queryKey: ["stations"], queryFn: api.stations });
-
-  const visibleStations = filters.regionId === "all" ? stations : stations.filter((station) => station.regionId === filters.regionId);
 
   return (
     <div className="global-filters">
@@ -32,27 +29,13 @@ export function GlobalFilters() {
         />
       </label>
       <label>
-        Region
-        <select
-          value={filters.regionId}
-          onChange={(event) => setFilters((current) => ({ ...current, regionId: event.target.value, stationId: "all" }))}
-        >
-          <option value="all">All regions</option>
-          {regions.map((region) => (
-            <option key={region.id} value={region.id}>
-              {region.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
         Station
         <select
           value={filters.stationId}
           onChange={(event) => setFilters((current) => ({ ...current, stationId: event.target.value }))}
         >
           <option value="all">All stations</option>
-          {visibleStations.map((station) => (
+          {stations.map((station) => (
             <option key={station.id} value={station.id}>
               {station.name}
             </option>

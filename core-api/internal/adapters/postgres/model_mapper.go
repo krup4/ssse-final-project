@@ -2,50 +2,21 @@ package postgres
 
 import (
 	"errors"
+	"strconv"
 
 	"gorm.io/gorm"
 
 	"weather-accuracy/core-api/internal/domain"
 )
 
-func setActualMetric(model *ActualWeatherReadingModel, metric string, value float64) {
-	switch metric {
-	case "temperature":
-		model.Temperature = &value
-	case "wind_speed":
-		model.WindSpeed = &value
-	case "humidity":
-		model.Humidity = &value
-	case "pressure":
-		model.Pressure = &value
-	case "precipitation":
-		model.PrecipitationTotal = &value
-	}
-}
-
-func setParameter(model *ActualWeatherReadingModel, parameter domain.WeatherParameter, value float64) {
-	switch parameter {
-	case domain.ParameterTemperature:
-		model.Temperature = &value
-	case domain.ParameterPrecipitation:
-		model.PrecipitationTotal = &value
-	case domain.ParameterWindSpeed:
-		model.WindSpeed = &value
-	case domain.ParameterWindGust:
-		model.WindGust = &value
-	case domain.ParameterHumidity:
-		model.Humidity = &value
-	case domain.ParameterPressure:
-		model.Pressure = &value
-	}
-}
-
 func toUser(model UserModel) domain.User {
 	return domain.User{
-		ID:           model.ID,
+		ID:           strconv.Itoa(model.ID),
+		Login:        model.Login,
 		Name:         model.Name,
 		Email:        model.Email,
-		Role:         domain.UserRole(model.Role),
+		Role:         domain.UserRole(model.Role.Name),
+		IsActive:     model.IsActive,
 		LastSeen:     model.LastSeen,
 		PasswordHash: model.PasswordHash,
 	}

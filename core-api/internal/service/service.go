@@ -9,6 +9,7 @@ import (
 type Dependencies struct {
 	Users             domain.UserRepository
 	Regions           domain.RegionRepository
+	ForecastFields    domain.ForecastFieldRepository
 	Stations          domain.StationRepository
 	Analytics         domain.AnalyticsRepository
 	Alerts            domain.AlertRepository

@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"strconv"
+	"time"
 
 	"weather-accuracy/core-api/internal/domain"
 )
@@ -11,40 +13,37 @@ type stationErrorValue struct {
 	ActualValue   float64
 }
 
-func (r *StationRepository) List(ctx context.Context, regionID string, status domain.StationStatus) ([]domain.Station, error) {
-	query := r.db.WithContext(ctx).Model(&StationModel{})
-	if regionID != "" && regionID != "all" {
-		query = query.Where("region_id = ?", regionID)
-	}
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
+func (r *StationRepository) List(ctx context.Context, _ string, _ domain.StationStatus) ([]domain.Station, error) {
 	var models []StationModel
-	if err := query.Order("name").Find(&models).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("is_active = true").Order("name").Find(&models).Error; err != nil {
 		return nil, err
 	}
 	out := make([]domain.Station, 0, len(models))
 	for _, model := range models {
 		station := domain.Station{
-			ID:              model.ID,
-			Name:            model.Name,
-			RegionID:        model.RegionID,
-			Lat:             model.Lat,
-			Lon:             model.Lon,
-			Status:          domain.StationStatus(model.Status),
-			ActiveSensors:   model.ActiveSensors,
-			LastTelemetryAt: model.LastTelemetryAt,
+			ID:            strconv.Itoa(model.ID),
+			Name:          model.Name,
+			Lat:           model.Lat,
+			Lon:           model.Lon,
+			Status:        domain.StationOnline,
+			ActiveSensors: 1,
+		}
+		var lastArchive time.Time
+		_ = r.db.WithContext(ctx).Model(&ArchiveModel{}).Where("station_id = ?", model.ID).Select("max(dt)").Scan(&lastArchive).Error
+		var lastForecast time.Time
+		_ = r.db.WithContext(ctx).Model(&ForecastModel{}).Where("station_id = ?", model.ID).Select("max(date)").Scan(&lastForecast).Error
+		if lastArchive.After(lastForecast) {
+			station.LastTelemetryAt = lastArchive
+		} else {
+			station.LastTelemetryAt = lastForecast
 		}
 		var values []stationErrorValue
 		_ = r.db.WithContext(ctx).Raw(`
-			select f.value as forecast_value,
-			       v.actual_value
-			from forecast_reading_models f
-			join actual_weather_reading_models a on a.station_id = f.station_id and a.observed_at = f.target_at
-			join lateral (
-				select unnest(array['temperature','wind_speed','humidity','pressure','precipitation']) metric,
-				       unnest(array[a.temperature,a.wind_speed,a.humidity,a.pressure,a.precipitation_total]) actual_value
-			) v on v.metric = f.metric and v.actual_value is not null
+			select f.value as forecast_value, a.value as actual_value
+			from forecasts f
+			join forecast_fields ff on ff.id = f.field_id
+			join metrics m on m.forecast_field_id = ff.id
+			join archive a on a.station_id = f.station_id and a.metric_id = m.id and a.dt = f.date
 			where f.station_id = ?`, model.ID).Scan(&values).Error
 		for _, value := range values {
 			absoluteError, _ := calculateError(value.ForecastValue, value.ActualValue)

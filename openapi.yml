@@ -46,7 +46,7 @@ paths:
             examples:
               analyst:
                 value:
-                  email: analyst@weather.local
+                  login: analyst
                   password: password
       responses:
         "200":
@@ -79,7 +79,7 @@ paths:
     get:
       tags: [Dictionaries]
       summary: List regions
-      description: Returns regions available for filtering stations and analytics.
+      description: Legacy compatibility endpoint. Regions are not part of the PostgreSQL operational schema and this endpoint returns an empty list.
       responses:
         "200":
           description: Region list.
@@ -253,7 +253,7 @@ paths:
     get:
       tags: [Analytics]
       summary: Get station forecast-vs-actual series
-      description: Returns forecast, actual, and absolute error time series for charting a station or region.
+      description: Returns forecast, actual, and absolute error time series for charting a station.
       parameters:
         - $ref: "#/components/parameters/DateFrom"
         - $ref: "#/components/parameters/DateTo"
@@ -548,12 +548,11 @@ components:
   schemas:
     LoginRequest:
       type: object
-      required: [email, password]
+      required: [login, password]
       properties:
-        email:
+        login:
           type: string
-          format: email
-          example: analyst@weather.local
+          example: analyst
         password:
           type: string
           format: password
@@ -572,11 +571,14 @@ components:
 
     User:
       type: object
-      required: [id, name, email, role, lastSeen]
+      required: [id, login, name, email, role, isActive, lastSeen]
       properties:
         id:
           type: string
-          example: u-2
+          example: "2"
+        login:
+          type: string
+          example: analyst
         name:
           type: string
           example: Alex Analyst
@@ -586,6 +588,9 @@ components:
           example: analyst@weather.local
         role:
           $ref: "#/components/schemas/UserRole"
+        isActive:
+          type: boolean
+          example: true
         lastSeen:
           type: string
           format: date-time
@@ -608,17 +613,14 @@ components:
 
     Station:
       type: object
-      required: [id, name, regionId, lat, lon, status, activeSensors, maxError, lastTelemetryAt]
+      required: [id, name, lat, lon, status, activeSensors, maxError, lastTelemetryAt]
       properties:
         id:
           type: string
-          example: st-004
+          example: "1"
         name:
           type: string
           example: Ryazan Field
-        regionId:
-          type: string
-          example: central
         lat:
           type: number
           format: double
@@ -736,7 +738,7 @@ components:
           example: e-1
         stationId:
           type: string
-          example: st-004
+          example: "1"
         stationName:
           type: string
           example: Ryazan Field
@@ -947,7 +949,7 @@ components:
         stationId:
           type: string
           nullable: true
-          example: st-004
+          example: "1"
         metric:
           nullable: true
           allOf:

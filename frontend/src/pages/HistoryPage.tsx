@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../shared/api/endpoints";
+import { useFilters } from "../features/filters/FiltersContext";
 import { formatNumber } from "../shared/lib/format";
 import { Panel } from "../shared/ui/Panel";
 
 export function HistoryPage() {
-  const { data = [] } = useQuery({ queryKey: ["history"], queryFn: api.history });
+  const { filters } = useFilters();
+  const { data = [] } = useQuery({ queryKey: ["history", filters], queryFn: () => api.history(filters) });
 
   return (
     <div className="page-grid">
@@ -14,7 +16,6 @@ export function HistoryPage() {
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Region</th>
                 <th>Station</th>
                 <th>MAE</th>
                 <th>RMSE</th>
@@ -26,7 +27,6 @@ export function HistoryPage() {
               {data.map((row) => (
                 <tr key={`${row.date}-${row.stationName}`}>
                   <td>{row.date}</td>
-                  <td>{row.regionName}</td>
                   <td>{row.stationName}</td>
                   <td>{formatNumber(row.mae)}</td>
                   <td>{formatNumber(row.rmse)}</td>

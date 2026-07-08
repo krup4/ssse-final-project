@@ -4,6 +4,7 @@ import "gorm.io/gorm"
 
 type UserRepository struct{ db *gorm.DB }
 type RegionRepository struct{ db *gorm.DB }
+type ForecastFieldRepository struct{ db *gorm.DB }
 type StationRepository struct{ db *gorm.DB }
 type AnalyticsRepository struct{ db *gorm.DB }
 type AlertRepository struct{ db *gorm.DB }

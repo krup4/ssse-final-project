@@ -2,13 +2,15 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDownUp } from "lucide-react";
 import { metricLabels, metricUnits } from "../entities/labels";
+import { useFilters } from "../features/filters/FiltersContext";
 import { api } from "../shared/api/endpoints";
 import { formatDateTime, formatNumber } from "../shared/lib/format";
 import { Panel } from "../shared/ui/Panel";
 
 export function ErrorsPage() {
   const [descending, setDescending] = useState(true);
-  const { data = [] } = useQuery({ queryKey: ["worst-errors"], queryFn: api.worstErrors });
+  const { filters } = useFilters();
+  const { data = [] } = useQuery({ queryKey: ["worst-errors", filters], queryFn: () => api.worstErrors(filters) });
   const rows = useMemo(
     () => [...data].sort((a, b) => (descending ? b.absoluteError - a.absoluteError : a.absoluteError - b.absoluteError)),
     [data, descending]
@@ -29,7 +31,6 @@ export function ErrorsPage() {
             <thead>
               <tr>
                 <th>Station</th>
-                <th>Region</th>
                 <th>Metric</th>
                 <th>Forecast</th>
                 <th>Actual</th>
@@ -41,7 +42,6 @@ export function ErrorsPage() {
               {rows.map((row) => (
                 <tr key={row.id}>
                   <td>{row.stationName}</td>
-                  <td>{row.regionName}</td>
                   <td>{metricLabels[row.metric]}</td>
                   <td>{formatNumber(row.forecastValue)} {metricUnits[row.metric]}</td>
                   <td>{formatNumber(row.actualValue)} {metricUnits[row.metric]}</td>

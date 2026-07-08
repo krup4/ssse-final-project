@@ -62,7 +62,6 @@ function balloonHtml(station: Station) {
     `<strong>${escapeHtml(station.name)}</strong>`,
     `<span class="badge badge-${station.status === "online" ? "good" : station.status === "degraded" ? "warn" : "bad"}">${station.status}</span>`,
     `<span>Max error: ${station.maxError}</span>`,
-    `<span>Sensors: ${station.activeSensors}</span>`,
     `<span>Last telemetry: ${formatDateTime(station.lastTelemetryAt)}</span>`,
     `</div>`
   ].join("");
