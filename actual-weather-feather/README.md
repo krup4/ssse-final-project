@@ -79,13 +79,3 @@ LOG_LEVEL=INFO
 
 - `python -m pytest` — unit-тесты (моки, без Kafka/PostgreSQL).
 - `docker compose run --rm -v "${PWD}:/app" actual-weather python -m pytest` — интеграционные тесты внутри контейнера.
-
-## Что упрощено
-
-- Удалён тревожный сохранение измерений в PostgreSQL, осталась только таблица `stations` для чтения.
-- Поток стал однопоточным в плане хранения — всё хранилище аналитики — Kafka.
-
-## Следующие шаги
-
-1. Добавить фабрики/clients для тестового окружения Kafka/Redis (если нужно).
-2. Настроить observability (внешние алерты) на метрики `errors_total` и `weather_requests_total`.
