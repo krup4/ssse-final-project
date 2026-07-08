@@ -14,7 +14,8 @@ func baseForecastActualSQL(currentOnly bool) string {
 		       f.station_id::text as station_id,
 		       s.name as station_name,
 		       '' as region_name,
-		       ff.name as metric,
+		       ff.name as parameter,
+		       m.name as metric,
 		       f.value as forecast_value,
 		       a.value as actual_value,
 		       a.dt as observed_at
@@ -25,14 +26,14 @@ func baseForecastActualSQL(currentOnly bool) string {
 		join archive a on a.station_id = f.station_id and a.metric_id = m.id and a.dt = f.date
 		where f.date >= ? and f.date <= ?
 		  and (? = '' or ? = 'all' or f.station_id::text = ?)
-		  and (? = '' or ff.name = ?)` + currentFilter
+		  and (? = '' or ? = 'all' or ff.name = ?)
+		  and (? = '' or ? = 'all' or m.name = ?)` + currentFilter
 }
 
 func baseParameterActualSQL(parameter string, currentOnly bool) string {
-	parameter = normalizeParameterName(parameter)
 	filter := ""
 	if parameter != "" && parameter != "all" {
-		filter = " and m.name = ?"
+		filter = " and ff.name = ?"
 	}
 	currentFilter := ""
 	if currentOnly {
@@ -42,7 +43,7 @@ func baseParameterActualSQL(parameter string, currentOnly bool) string {
 		select f.id as forecast_id,
 		       m.id as metric_id,
 		       concat(f.id::text, '-', m.id::text) as id,
-		       m.name as parameter,
+		       ff.name as parameter,
 		       f.station_id::text as station_id,
 		       s.name as station_name,
 		       '' as region_name,
@@ -55,7 +56,9 @@ func baseParameterActualSQL(parameter string, currentOnly bool) string {
 		join metrics m on m.forecast_field_id = ff.id
 		join archive a on a.station_id = f.station_id and a.metric_id = m.id and a.dt = f.date
 		where f.date >= ? and f.date <= ?
-		  and (? = '' or ? = 'all' or f.station_id::text = ?)` + currentFilter + filter
+		  and (? = '' or ? = 'all' or f.station_id::text = ?)
+		  and (? = '' or ? = 'all' or ff.name = ?)
+		  and (? = '' or ? = 'all' or m.name = ?)` + currentFilter + filter
 }
 
 func sqlArgs(filter domain.AnalyticsFilter) []any {
@@ -63,7 +66,8 @@ func sqlArgs(filter domain.AnalyticsFilter) []any {
 		filter.DateFrom,
 		filter.DateTo,
 		filter.StationID, filter.StationID, filter.StationID,
-		string(filter.Metric), string(filter.Metric),
+		filter.Field, filter.Field, filter.Field,
+		string(filter.Metric), string(filter.Metric), string(filter.Metric),
 	}
 }
 
@@ -72,16 +76,11 @@ func parameterArgs(filter domain.ParameterFilter) []any {
 		filter.DateFrom,
 		filter.DateTo,
 		filter.StationID, filter.StationID, filter.StationID,
+		filter.Field, filter.Field, filter.Field,
+		string(filter.Metric), string(filter.Metric), string(filter.Metric),
 	}
 	if filter.Parameter != "" && filter.Parameter != "all" {
-		args = append(args, normalizeParameterName(filter.Parameter))
+		args = append(args, filter.Parameter)
 	}
 	return args
-}
-
-func normalizeParameterName(parameter string) string {
-	if parameter == "precipitation_total" {
-		return "precipitation"
-	}
-	return parameter
 }

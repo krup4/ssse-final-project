@@ -13,7 +13,10 @@ import type {
   User,
   UserRole,
   AnalyticsFilters,
-  ForecastField
+  ForecastField,
+  MetricDefinition,
+  StationInput,
+  StationStatus
 } from "../../entities/types";
 
 function filterParams(filters?: AnalyticsFilters) {
@@ -24,6 +27,7 @@ function filterParams(filters?: AnalyticsFilters) {
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
     stationId: filters.stationId,
+    field: filters.field,
     metric: filters.metric
   };
 }
@@ -32,7 +36,10 @@ export const api = {
   login: (payload: LoginRequest) => apiClient.post<LoginResponse>("/auth/login", payload).then((res) => res.data),
   me: () => apiClient.get<User>("/auth/me").then((res) => res.data),
   forecastFields: () => apiClient.get<ForecastField[]>("/forecast-fields").then((res) => res.data),
-  stations: () => apiClient.get<Station[]>("/stations").then((res) => res.data),
+  metrics: () => apiClient.get<MetricDefinition[]>("/metrics/catalog").then((res) => res.data),
+  stations: (status?: StationStatus) => apiClient.get<Station[]>("/stations", { params: status ? { status } : undefined }).then((res) => res.data),
+  createStation: (payload: StationInput) => apiClient.post<Station>("/stations", payload).then((res) => res.data),
+  updateStation: (id: string, payload: StationInput) => apiClient.patch<Station>(`/stations/${id}`, payload).then((res) => res.data),
   overview: (filters?: AnalyticsFilters) => apiClient.get<OverviewMetrics>("/metrics/overview", { params: filterParams(filters) }).then((res) => res.data),
   worstErrors: (filters?: AnalyticsFilters) => apiClient.get<ForecastErrorRow[]>("/analytics/worst-errors", { params: filterParams(filters) }).then((res) => res.data),
   parameterErrors: (parameter = "all", filters?: AnalyticsFilters) =>

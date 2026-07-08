@@ -9,6 +9,7 @@ import { ErrorsPage } from "../pages/ErrorsPage";
 import { HistoryPage } from "../pages/HistoryPage";
 import { LoginPage } from "../pages/LoginPage";
 import { ParameterErrorsPage } from "../pages/ParameterErrorsPage";
+import { StationsPage } from "../pages/StationsPage";
 import { UsersPage } from "../pages/UsersPage";
 
 export const router = createBrowserRouter([
@@ -45,7 +46,10 @@ export const router = createBrowserRouter([
               },
               {
                 element: <ProtectedRoute roles={["admin"]} />,
-                children: [{ path: "/users", element: <UsersPage /> }]
+                children: [
+                  { path: "/stations", element: <StationsPage /> },
+                  { path: "/users", element: <UsersPage /> }
+                ]
               }
             ]
           }

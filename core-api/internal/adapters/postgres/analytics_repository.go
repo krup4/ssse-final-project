@@ -19,6 +19,7 @@ type forecastActualRow struct {
 	StationID     string
 	StationName   string
 	RegionName    string
+	Parameter     string
 	Metric        string
 	ForecastValue float64
 	ActualValue   float64
@@ -30,7 +31,7 @@ type archiveCalculation struct {
 	StationID   int
 	MetricID    int
 	ObservedAt  time.Time
-	ActualValue float64
+	MetricValue float64
 }
 
 type parameterActualRow struct {
@@ -322,25 +323,26 @@ func (r *AnalyticsRepository) forecastErrorRows(ctx context.Context, filter doma
 	rows := make([]domain.ForecastErrorRow, 0, len(raw))
 	calculations := make([]archiveCalculation, 0, len(raw))
 	for _, row := range raw {
-		absoluteError, errorPct := calculateError(row.ForecastValue, row.ActualValue)
+		metricValue := row.ActualValue
 		stationID, _ := strconv.Atoi(row.StationID)
 		calculations = append(calculations, archiveCalculation{
 			ForecastID:  row.ForecastID,
 			StationID:   stationID,
 			MetricID:    row.MetricID,
 			ObservedAt:  row.ObservedAt,
-			ActualValue: row.ActualValue,
+			MetricValue: metricValue,
 		})
 		rows = append(rows, domain.ForecastErrorRow{
 			ID:            row.ID,
 			StationID:     row.StationID,
 			StationName:   row.StationName,
 			RegionName:    row.RegionName,
+			Parameter:     row.Parameter,
 			Metric:        domain.Metric(row.Metric),
 			ForecastValue: row.ForecastValue,
 			ActualValue:   row.ActualValue,
-			AbsoluteError: absoluteError,
-			ErrorPct:      errorPct,
+			AbsoluteError: metricValue,
+			ErrorPct:      metricPercent(row.ForecastValue, metricValue),
 			ObservedAt:    row.ObservedAt,
 		})
 	}
@@ -369,14 +371,14 @@ func (r *AnalyticsRepository) parameterErrorRows(ctx context.Context, filter dom
 	rows := make([]domain.ParameterErrorRow, 0, len(raw))
 	calculations := make([]archiveCalculation, 0, len(raw))
 	for _, row := range raw {
-		absoluteError, errorPct := calculateError(row.ForecastValue, row.ActualValue)
+		metricValue := row.ActualValue
 		stationID, _ := strconv.Atoi(row.StationID)
 		calculations = append(calculations, archiveCalculation{
 			ForecastID:  row.ForecastID,
 			StationID:   stationID,
 			MetricID:    row.MetricID,
 			ObservedAt:  row.ObservedAt,
-			ActualValue: row.ActualValue,
+			MetricValue: metricValue,
 		})
 		rows = append(rows, domain.ParameterErrorRow{
 			ID:            row.ID,
@@ -386,8 +388,8 @@ func (r *AnalyticsRepository) parameterErrorRows(ctx context.Context, filter dom
 			RegionName:    row.RegionName,
 			ForecastValue: row.ForecastValue,
 			ActualValue:   row.ActualValue,
-			AbsoluteError: absoluteError,
-			ErrorPct:      errorPct,
+			AbsoluteError: metricValue,
+			ErrorPct:      metricPercent(row.ForecastValue, metricValue),
 			ObservedAt:    row.ObservedAt,
 		})
 	}
@@ -408,7 +410,7 @@ func (r *AnalyticsRepository) archiveCalculations(ctx context.Context, calculati
 				StationID: calc.StationID,
 				MetricID:  calc.MetricID,
 				Dt:        calc.ObservedAt,
-				Value:     calc.ActualValue,
+				Value:     calc.MetricValue,
 			}
 			err := tx.Exec(`
 				insert into archive (dt, station_id, metric_id, value)
@@ -441,6 +443,13 @@ func calculateError(forecastValue, actualValue float64) (absoluteError float64, 
 		return absoluteError, 0
 	}
 	return absoluteError, math.Abs((actualValue - forecastValue) / forecastValue * 100)
+}
+
+func metricPercent(forecastValue, metricValue float64) float64 {
+	if math.Abs(forecastValue) < 0.000001 {
+		return 0
+	}
+	return math.Abs(metricValue / forecastValue * 100)
 }
 
 func sortForecastErrors(rows []domain.ForecastErrorRow, sortOrder string) {

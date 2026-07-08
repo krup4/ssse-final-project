@@ -1,19 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CloudSun, KeyRound } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../features/auth/AuthContext";
 
-const demoAccounts = [
-  "admin",
-  "analyst",
-  "operator",
-  "viewer"
-];
-
 export function LoginPage() {
-  const { login } = useAuth();
-  const [loginName, setLoginName] = useState(demoAccounts[0]);
-  const [password, setPassword] = useState("password");
+  const { login, token, user, isAuthReady } = useAuth();
+  const navigate = useNavigate();
+  const [loginName, setLoginName] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAuthReady && token && user) {
+      navigate("/", { replace: true });
+    }
+  }, [isAuthReady, navigate, token, user]);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,23 +47,28 @@ export function LoginPage() {
             </div>
             <div>
               <h1>Sign in</h1>
-              <p>Use a demo role to inspect dashboards and access controls.</p>
+              <p>Enter your login and password to access analytics.</p>
             </div>
           </div>
           <form onSubmit={onSubmit}>
             <label>
-              Account
-              <select value={loginName} onChange={(event) => setLoginName(event.target.value)}>
-                {demoAccounts.map((account) => (
-                  <option key={account} value={account}>
-                    {account}
-                  </option>
-                ))}
-              </select>
+              Login
+              <input
+                value={loginName}
+                onChange={(event) => setLoginName(event.target.value)}
+                autoComplete="username"
+                required
+              />
             </label>
             <label>
               Password
-              <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" />
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type="password"
+                autoComplete="current-password"
+                required
+              />
             </label>
             <button type="submit" className="primary-button" disabled={isLoading}>
               {isLoading ? "Signing in..." : "Sign in"}

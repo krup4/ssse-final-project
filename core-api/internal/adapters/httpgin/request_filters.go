@@ -15,6 +15,7 @@ func (h *Handler) analyticsFilter(c *gin.Context, stationRequired bool, metricRe
 	}
 	stationID := c.Query("stationId")
 	metric := domain.Metric(c.Query("metric"))
+	field := c.Query("field")
 	if stationRequired && stationID == "" {
 		validation(c, "stationId is required")
 		return domain.AnalyticsFilter{}, false
@@ -23,15 +24,12 @@ func (h *Handler) analyticsFilter(c *gin.Context, stationRequired bool, metricRe
 		validation(c, "metric is required")
 		return domain.AnalyticsFilter{}, false
 	}
-	if metric != "" && !validMetric(metric) {
-		validation(c, "invalid metric")
-		return domain.AnalyticsFilter{}, false
-	}
 	return domain.AnalyticsFilter{
 		DateFrom:  dateFrom,
 		DateTo:    dateTo.Add(24*time.Hour - time.Nanosecond),
 		RegionID:  c.Query("regionId"),
 		StationID: stationID,
+		Field:     field,
 		Metric:    metric,
 	}, true
 }
@@ -42,10 +40,6 @@ func (h *Handler) parameterFilter(c *gin.Context) (domain.ParameterFilter, bool)
 		return domain.ParameterFilter{}, false
 	}
 	parameter := defaultString(c.Query("parameter"), "all")
-	if parameter != "all" && !validParameter(domain.WeatherParameter(parameter)) {
-		validation(c, "invalid weather parameter")
-		return domain.ParameterFilter{}, false
-	}
 	return domain.ParameterFilter{AnalyticsFilter: base, Parameter: parameter}, true
 }
 

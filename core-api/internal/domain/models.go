@@ -14,22 +14,19 @@ const (
 type Metric string
 
 const (
-	MetricTemperature   Metric = "temperature"
-	MetricWindSpeed     Metric = "wind_speed"
-	MetricHumidity      Metric = "humidity"
-	MetricPressure      Metric = "pressure"
-	MetricPrecipitation Metric = "precipitation"
+	MetricMAE  Metric = "mae"
+	MetricMSE  Metric = "mse"
+	MetricRMSE Metric = "rmse"
 )
 
 type WeatherParameter string
 
 const (
-	ParameterTemperature   WeatherParameter = "temperature"
-	ParameterPrecipitation WeatherParameter = "precipitation_total"
-	ParameterWindSpeed     WeatherParameter = "wind_speed"
-	ParameterWindGust      WeatherParameter = "wind_gust"
-	ParameterHumidity      WeatherParameter = "humidity"
-	ParameterPressure      WeatherParameter = "pressure"
+	ParameterTemperature WeatherParameter = "temperature"
+	ParameterWindSpeed   WeatherParameter = "wind_speed"
+	ParameterWindGust    WeatherParameter = "wind_gust"
+	ParameterHumidity    WeatherParameter = "humidity"
+	ParameterPressure    WeatherParameter = "pressure"
 )
 
 type StationStatus string
@@ -87,16 +84,31 @@ type ForecastField struct {
 	Name string `json:"name"`
 }
 
+type MetricDefinition struct {
+	ID              string `json:"id"`
+	ForecastFieldID string `json:"forecastFieldId"`
+	ForecastField   string `json:"forecastField"`
+	Name            string `json:"name"`
+}
+
 type Station struct {
 	ID              string        `json:"id"`
 	Name            string        `json:"name"`
 	RegionID        string        `json:"regionId"`
 	Lat             float64       `json:"lat"`
 	Lon             float64       `json:"lon"`
+	IsActive        bool          `json:"isActive"`
 	Status          StationStatus `json:"status"`
 	ActiveSensors   int           `json:"activeSensors"`
 	MaxError        float64       `json:"maxError"`
 	LastTelemetryAt time.Time     `json:"lastTelemetryAt"`
+}
+
+type StationInput struct {
+	Name     string  `json:"name"`
+	Lat      float64 `json:"lat"`
+	Lon      float64 `json:"lon"`
+	IsActive bool    `json:"isActive"`
 }
 
 type ForecastReading struct {
@@ -142,6 +154,7 @@ type ForecastErrorRow struct {
 	StationID     string    `json:"stationId"`
 	StationName   string    `json:"stationName"`
 	RegionName    string    `json:"regionName"`
+	Parameter     string    `json:"parameter"`
 	Metric        Metric    `json:"metric"`
 	ForecastValue float64   `json:"forecastValue"`
 	ActualValue   float64   `json:"actualValue"`
@@ -216,6 +229,7 @@ type AnalyticsFilter struct {
 	DateTo    time.Time
 	RegionID  string
 	StationID string
+	Field     string
 	Metric    Metric
 }
 

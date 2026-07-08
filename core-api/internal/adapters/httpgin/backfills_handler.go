@@ -27,10 +27,6 @@ func (h *Handler) createBackfill(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if req.Metric != "" && !validMetric(req.Metric) {
-		validation(c, "invalid metric")
-		return
-	}
 	job, err := h.svc.CreateBackfill(c.Request.Context(), domain.BackfillRequest{
 		DateFrom:           dateFrom,
 		DateTo:             dateTo,

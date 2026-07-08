@@ -15,5 +15,9 @@ export function formatChartDate(value: string) {
 }
 
 export function formatNumber(value: number) {
-  return new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value);
+  return new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(value);
+}
+
+export function formatTooltipValue(value: unknown) {
+  return typeof value === "number" ? formatNumber(value) : String(value);
 }

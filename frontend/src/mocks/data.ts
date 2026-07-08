@@ -8,7 +8,8 @@ import type {
   Station,
   StationSeriesPoint,
   User,
-  ForecastField
+  ForecastField,
+  MetricDefinition
 } from "../entities/types";
 
 export const users: User[] = [
@@ -19,17 +20,25 @@ export const users: User[] = [
 ];
 
 export const stations: Station[] = [
-  { id: "1", name: "Ryazan Field", lat: 54.626, lon: 39.735, status: "online", activeSensors: 1, maxError: 21.1, lastTelemetryAt: "2026-07-08T09:00:00Z" },
-  { id: "2", name: "Caspian Steppe", lat: 46.349, lon: 48.041, status: "online", activeSensors: 1, maxError: 16.7, lastTelemetryAt: "2026-07-08T09:00:00Z" }
+  { id: "1", name: "Ryazan Field", lat: 54.626, lon: 39.735, isActive: true, status: "online", activeSensors: 1, maxError: 21.1, lastTelemetryAt: "2026-07-08T09:00:00Z" },
+  { id: "2", name: "Caspian Steppe", lat: 46.349, lon: 48.041, isActive: true, status: "online", activeSensors: 1, maxError: 16.7, lastTelemetryAt: "2026-07-08T09:00:00Z" }
 ];
 
 export const forecastFields: ForecastField[] = [
   { id: "1", name: "temperature" },
   { id: "2", name: "wind_speed" },
   { id: "3", name: "humidity" },
-  { id: "4", name: "pressure" },
-  { id: "5", name: "precipitation" }
+  { id: "4", name: "pressure" }
 ];
+
+export const metrics: MetricDefinition[] = forecastFields.flatMap((field) =>
+  ["mae", "mse", "rmse"].map((name, index) => ({
+    id: `${field.id}-${index + 1}`,
+    forecastFieldId: field.id,
+    forecastField: field.name,
+    name
+  }))
+);
 
 export const overview: OverviewMetrics = {
   activeStations: 2,
@@ -47,8 +56,8 @@ export const overview: OverviewMetrics = {
 };
 
 export const worstErrors: ForecastErrorRow[] = [
-  { id: "e-1", stationId: "1", stationName: "Ryazan Field", metric: "wind_speed", forecastValue: 8.2, actualValue: 29.3, absoluteError: 21.1, errorPct: 257, observedAt: "2026-07-08T07:30:00Z" },
-  { id: "e-2", stationId: "2", stationName: "Caspian Steppe", metric: "pressure", forecastValue: 1008.1, actualValue: 998.5, absoluteError: 9.6, errorPct: 1, observedAt: "2026-07-08T05:10:00Z" }
+  { id: "e-1", stationId: "1", stationName: "Ryazan Field", parameter: "wind_speed", metric: "mae", forecastValue: 8.2, actualValue: 29.3, absoluteError: 21.1, errorPct: 257, observedAt: "2026-07-08T07:30:00Z" },
+  { id: "e-2", stationId: "2", stationName: "Caspian Steppe", parameter: "pressure", metric: "mae", forecastValue: 1008.1, actualValue: 998.5, absoluteError: 9.6, errorPct: 1, observedAt: "2026-07-08T05:10:00Z" }
 ];
 
 export const parameterErrors: ParameterErrorRow[] = [

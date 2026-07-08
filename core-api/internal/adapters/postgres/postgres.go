@@ -191,42 +191,52 @@ func (r *Repositories) SeedDemoData(ctx context.Context) error {
 }
 
 func seedReadings(tx *gorm.DB, now time.Time) error {
-	metrics := []string{"temperature", "wind_speed", "humidity", "pressure", "precipitation"}
+	fields := []string{"temperature", "wind_speed", "humidity", "pressure"}
+	errorMetrics := []string{"mae", "mse", "rmse"}
 	stations := []int{1, 2, 3}
 	fieldByName := map[string]ForecastFieldModel{}
-	metricByName := map[string]MetricModel{}
-	for _, name := range append(metrics, "wind_gust") {
+	metricByFieldAndName := map[string]MetricModel{}
+	for _, name := range append(fields, "wind_gust") {
 		field := ForecastFieldModel{Name: name}
 		if err := tx.Where("name = ?", name).FirstOrCreate(&field).Error; err != nil {
 			return err
 		}
 		fieldByName[name] = field
-		metric := MetricModel{ForecastFieldID: field.ID, Name: name}
-		if err := tx.Where("forecast_field_id = ? and name = ?", field.ID, name).FirstOrCreate(&metric).Error; err != nil {
-			return err
+		for _, metricName := range errorMetrics {
+			metric := MetricModel{ForecastFieldID: field.ID, Name: metricName}
+			if err := tx.Where("forecast_field_id = ? and name = ?", field.ID, metricName).FirstOrCreate(&metric).Error; err != nil {
+				return err
+			}
+			metricByFieldAndName[name+":"+metricName] = metric
 		}
-		metricByName[name] = metric
 	}
 	for h := 0; h < 36; h++ {
 		ts := now.Truncate(time.Hour).Add(time.Duration(-h) * time.Hour)
 		for _, station := range stations {
-			for i, metric := range metrics {
+			for i, field := range fields {
 				forecast := 10 + float64(i*7) + float64(h%5)
 				actual := forecast + float64((h+i)%9-4)
+				absoluteError, _ := calculateError(forecast, actual)
 				fr := ForecastModel{
 					StationID:  station,
-					FieldID:    fieldByName[metric].ID,
+					FieldID:    fieldByName[field].ID,
 					Value:      forecast,
 					Date:       ts,
 					Interval:   "6h",
 					IsArchived: h > 5,
 				}
-				ar := ArchiveModel{StationID: station, MetricID: metricByName[metric].ID, Dt: ts, Value: actual}
 				if err := tx.Create(&fr).Error; err != nil && !isDuplicate(err) {
 					return err
 				}
-				if err := tx.Create(&ar).Error; err != nil && !isDuplicate(err) {
-					return err
+				for _, metricName := range errorMetrics {
+					value := absoluteError
+					if metricName == "mse" {
+						value = absoluteError * absoluteError
+					}
+					ar := ArchiveModel{StationID: station, MetricID: metricByFieldAndName[field+":"+metricName].ID, Dt: ts, Value: value}
+					if err := tx.Create(&ar).Error; err != nil && !isDuplicate(err) {
+						return err
+					}
 				}
 			}
 		}

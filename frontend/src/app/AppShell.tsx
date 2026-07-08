@@ -7,6 +7,7 @@ import {
   LogOut,
   Map,
   ListFilter,
+  RadioTower,
   Shield,
   Target
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { RoleBadge } from "../shared/ui/StatusBadge";
 const navItems: Array<{ path: string; label: string; icon: typeof LayoutDashboard; roles: UserRole[] }> = [
   { path: "/", label: "Overview", icon: LayoutDashboard, roles: ["admin", "analyst", "operator", "viewer"] },
   { path: "/map", label: "Station map", icon: Map, roles: ["admin", "analyst", "operator", "viewer"] },
+  { path: "/stations", label: "Stations", icon: RadioTower, roles: ["admin"] },
   { path: "/errors", label: "Top errors", icon: Target, roles: ["admin", "analyst", "viewer"] },
   { path: "/parameter-errors", label: "Parameter errors", icon: ListFilter, roles: ["admin", "analyst", "viewer"] },
   { path: "/charts", label: "Station charts", icon: BarChart3, roles: ["admin", "analyst", "viewer"] },
@@ -36,9 +38,9 @@ export function AppShell() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
-            <Activity size={22} />
+            <img src="/logo.png" alt="Logo" className="brand-logo" />
           </div>
-          <div>
+          <div className="brand-copy">
             <strong>Weather Accuracy</strong>
             <span>Forecast error analytics</span>
           </div>
@@ -52,7 +54,7 @@ export function AppShell() {
           ))}
         </nav>
         <div className="sidebar-user">
-          <div>
+          <div className="sidebar-user-copy">
             <strong>{user?.name}</strong>
             {user ? <RoleBadge role={user.role} /> : null}
           </div>

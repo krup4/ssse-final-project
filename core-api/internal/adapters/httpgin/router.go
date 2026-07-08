@@ -34,7 +34,10 @@ func (h *Handler) registerAPIRoutes(api *gin.RouterGroup) {
 
 	protected.GET("/regions", h.regions)
 	protected.GET("/forecast-fields", h.forecastFields)
+	protected.GET("/metrics/catalog", h.metricDefinitions)
 	protected.GET("/stations", h.stations)
+	protected.POST("/stations", h.createStation)
+	protected.PATCH("/stations/:id", h.updateStation)
 
 	protected.GET("/metrics/overview", h.overview)
 	protected.GET("/analytics/worst-errors", h.worstErrors)

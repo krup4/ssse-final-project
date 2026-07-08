@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../shared/api/endpoints";
 import { useFilters } from "../features/filters/FiltersContext";
+import { metricLabels } from "../entities/labels";
 import { formatNumber } from "../shared/lib/format";
 import { Panel } from "../shared/ui/Panel";
 
 export function HistoryPage() {
   const { filters } = useFilters();
   const { data = [] } = useQuery({ queryKey: ["history", filters], queryFn: () => api.history(filters) });
+  const metricTitle = filters.metric === "all" ? "Avg metric value" : (metricLabels[filters.metric] ?? filters.metric);
 
   return (
     <div className="page-grid">
@@ -17,8 +19,8 @@ export function HistoryPage() {
               <tr>
                 <th>Date</th>
                 <th>Station</th>
-                <th>MAE</th>
-                <th>RMSE</th>
+                <th>{metricTitle}</th>
+                {filters.metric === "all" ? <th>Metric spread</th> : null}
                 <th>Samples</th>
                 <th>Backfill</th>
               </tr>
@@ -29,7 +31,7 @@ export function HistoryPage() {
                   <td>{row.date}</td>
                   <td>{row.stationName}</td>
                   <td>{formatNumber(row.mae)}</td>
-                  <td>{formatNumber(row.rmse)}</td>
+                  {filters.metric === "all" ? <td>{formatNumber(row.rmse)}</td> : null}
                   <td>{row.samples.toLocaleString("en")}</td>
                   <td>{row.backfillVersion}</td>
                 </tr>

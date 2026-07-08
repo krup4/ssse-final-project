@@ -23,8 +23,8 @@ func (r *AnalyticsRepository) Overview(ctx context.Context, filter domain.Analyt
 		WHERE date >= toDate(?) AND date <= toDate(?)
 		  AND (? = '' OR ? = 'all' OR region_id = ?)
 		  AND (? = '' OR ? = 'all' OR station_id = ?)
-		  AND (? = '' OR metric = ?)
-	`, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric)).
+		  AND (? = '' OR ? = 'all' OR metric = ?)
+	`, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric), string(filter.Metric)).
 		Scan(&overview.ActiveStations, &overview.DegradedStations, &overview.OfflineStations, &overview.KafkaLag, &overview.RequestRate, &overview.P95LatencyMs, &overview.WorstErrorToday)
 	if err != nil {
 		return overview, err
@@ -49,10 +49,10 @@ func (r *AnalyticsRepository) WorstErrors(ctx context.Context, filter domain.Ana
 		WHERE observed_at >= ? AND observed_at <= ?
 		  AND (? = '' OR ? = 'all' OR region_id = ?)
 		  AND (? = '' OR ? = 'all' OR station_id = ?)
-		  AND (? = '' OR metric = ?)
+		  AND (? = '' OR ? = 'all' OR metric = ?)
 		ORDER BY ` + order + `
 		LIMIT ?`
-	rows, err := r.db.QueryContext(ctx, query, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric), limit)
+	rows, err := r.db.QueryContext(ctx, query, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric), string(filter.Metric), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -80,9 +80,10 @@ func (r *AnalyticsRepository) ParameterErrors(ctx context.Context, filter domain
 		  AND (? = '' OR ? = 'all' OR region_id = ?)
 		  AND (? = '' OR ? = 'all' OR station_id = ?)
 		  AND (? = '' OR ? = 'all' OR parameter = ?)
+		  AND (? = '' OR ? = 'all' OR parameter = ?)
 		ORDER BY absolute_error DESC
 		LIMIT 500`
-	rows, err := r.db.QueryContext(ctx, query, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, filter.Parameter, filter.Parameter, filter.Parameter)
+	rows, err := r.db.QueryContext(ctx, query, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric), string(filter.Metric), filter.Parameter, filter.Parameter, filter.Parameter)
 	if err != nil {
 		return nil, err
 	}
@@ -110,9 +111,10 @@ func (r *AnalyticsRepository) ParameterTrend(ctx context.Context, filter domain.
 		  AND (? = '' OR ? = 'all' OR region_id = ?)
 		  AND (? = '' OR ? = 'all' OR station_id = ?)
 		  AND (? = '' OR ? = 'all' OR parameter = ?)
+		  AND (? = '' OR ? = 'all' OR parameter = ?)
 		GROUP BY bucket_ts, parameter
 		ORDER BY bucket_ts, parameter`, bucket)
-	rows, err := r.db.QueryContext(ctx, query, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, filter.Parameter, filter.Parameter, filter.Parameter)
+	rows, err := r.db.QueryContext(ctx, query, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric), string(filter.Metric), filter.Parameter, filter.Parameter, filter.Parameter)
 	if err != nil {
 		return nil, err
 	}
@@ -137,11 +139,11 @@ func (r *AnalyticsRepository) StationSeries(ctx context.Context, filter domain.A
 		SELECT %s AS bucket_ts, avg(forecast), avg(actual), avg(absolute_error)
 		FROM station_series
 		WHERE timestamp >= ? AND timestamp <= ?
-		  AND station_id = ?
-		  AND metric = ?
+		  AND (? = '' OR ? = 'all' OR station_id = ?)
+		  AND (? = '' OR ? = 'all' OR metric = ?)
 		GROUP BY bucket_ts
 		ORDER BY bucket_ts`, bucketExpr)
-	rows, err := r.db.QueryContext(ctx, query, filter.DateFrom, filter.DateTo, filter.StationID, string(filter.Metric))
+	rows, err := r.db.QueryContext(ctx, query, filter.DateFrom, filter.DateTo, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric), string(filter.Metric))
 	if err != nil {
 		return nil, err
 	}
@@ -165,9 +167,9 @@ func (r *AnalyticsRepository) History(ctx context.Context, filter domain.Analyti
 		WHERE date >= toDate(?) AND date <= toDate(?)
 		  AND (? = '' OR ? = 'all' OR region_id = ?)
 		  AND (? = '' OR ? = 'all' OR station_id = ?)
-		  AND (? = '' OR metric = ?)
+		  AND (? = '' OR ? = 'all' OR metric = ?)
 		ORDER BY date DESC, mae DESC
-	`, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric))
+	`, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric), string(filter.Metric))
 	if err != nil {
 		return nil, err
 	}
@@ -191,10 +193,10 @@ func (r *AnalyticsRepository) errorTrend(ctx context.Context, filter domain.Anal
 		WHERE date >= toDate(?) AND date <= toDate(?)
 		  AND (? = '' OR ? = 'all' OR region_id = ?)
 		  AND (? = '' OR ? = 'all' OR station_id = ?)
-		  AND (? = '' OR metric = ?)
+		  AND (? = '' OR ? = 'all' OR metric = ?)
 		GROUP BY date
 		ORDER BY date
-	`, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric))
+	`, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric), string(filter.Metric))
 	if err != nil {
 		return nil, err
 	}

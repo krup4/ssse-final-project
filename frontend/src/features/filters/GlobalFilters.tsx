@@ -1,14 +1,37 @@
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { metricLabels } from "../../entities/labels";
-import type { MetricKey } from "../../entities/types";
+import { RotateCcw } from "lucide-react";
+import { metricLabels, weatherParameterLabels } from "../../entities/labels";
 import { api } from "../../shared/api/endpoints";
-import { useFilters } from "./FiltersContext";
-
-const metricOptions: MetricKey[] = ["temperature", "wind_speed", "humidity", "pressure", "precipitation"];
+import { defaultFilters, useFilters } from "./FiltersContext";
 
 export function GlobalFilters() {
   const { filters, setFilters } = useFilters();
-  const { data: stations = [] } = useQuery({ queryKey: ["stations"], queryFn: api.stations });
+  const { data: stations = [] } = useQuery({ queryKey: ["stations", "online"], queryFn: () => api.stations("online") });
+  const { data: forecastFields = [] } = useQuery({ queryKey: ["forecast-fields"], queryFn: api.forecastFields });
+  const { data: metrics = [] } = useQuery({ queryKey: ["metrics-catalog"], queryFn: api.metrics });
+  const metricOptions = useMemo(() => {
+    const allowed = filters.field === "all" ? metrics : metrics.filter((metric) => metric.forecastField === filters.field);
+    return [...new Set(allowed.map((metric) => metric.name))].sort();
+  }, [filters.field, metrics]);
+
+  useEffect(() => {
+    if (filters.field !== "all" && forecastFields.length > 0 && !forecastFields.some((field) => field.name === filters.field)) {
+      setFilters((current) => ({ ...current, field: "all" }));
+    }
+  }, [filters.field, forecastFields, setFilters]);
+
+  useEffect(() => {
+    if (filters.metric !== "all" && metricOptions.length > 0 && !metricOptions.includes(filters.metric)) {
+      setFilters((current) => ({ ...current, metric: "all" }));
+    }
+  }, [filters.metric, metricOptions, setFilters]);
+
+  useEffect(() => {
+    if (filters.stationId !== "all" && stations.length > 0 && !stations.some((station) => station.id === filters.stationId)) {
+      setFilters((current) => ({ ...current, stationId: "all" }));
+    }
+  }, [filters.stationId, setFilters, stations]);
 
   return (
     <div className="global-filters">
@@ -43,18 +66,41 @@ export function GlobalFilters() {
         </select>
       </label>
       <label>
-        Metric
+        Parameter
         <select
-          value={filters.metric}
-          onChange={(event) => setFilters((current) => ({ ...current, metric: event.target.value as MetricKey }))}
+          value={filters.field}
+          onChange={(event) => setFilters((current) => ({ ...current, field: event.target.value }))}
         >
-          {metricOptions.map((metric) => (
-            <option key={metric} value={metric}>
-              {metricLabels[metric]}
+          <option value="all">All parameters</option>
+          {forecastFields.map((field) => (
+            <option key={field.id} value={field.name}>
+              {weatherParameterLabels[field.name] ?? field.name}
             </option>
           ))}
         </select>
       </label>
+      <label>
+        Metric
+        <select
+          value={filters.metric}
+          onChange={(event) => setFilters((current) => ({ ...current, metric: event.target.value }))}
+        >
+          <option value="all">All metrics</option>
+          {metricOptions.map((metric) => (
+            <option key={metric} value={metric}>
+              {metricLabels[metric] ?? metric}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="ghost-button filter-reset-button"
+        onClick={() => setFilters(defaultFilters())}
+      >
+        <RotateCcw size={16} />
+        Reset
+      </button>
     </div>
   );
 }

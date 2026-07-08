@@ -3,13 +3,15 @@ import { Activity, Gauge, RadioTower, Server, Timer, TriangleAlert } from "lucid
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../shared/api/endpoints";
 import { useFilters } from "../features/filters/FiltersContext";
-import { formatChartDate, formatNumber } from "../shared/lib/format";
+import { metricLabels } from "../entities/labels";
+import { formatChartDate, formatNumber, formatTooltipValue } from "../shared/lib/format";
 import { MetricCard } from "../shared/ui/MetricCard";
 import { Panel } from "../shared/ui/Panel";
 
 export function DashboardPage() {
   const { filters } = useFilters();
   const { data } = useQuery({ queryKey: ["overview", filters], queryFn: () => api.overview(filters) });
+  const metricTitle = filters.metric === "all" ? "All metrics" : (metricLabels[filters.metric] ?? filters.metric);
 
   if (!data) {
     return <div className="page-grid">Loading dashboard...</div>;
@@ -21,11 +23,11 @@ export function DashboardPage() {
         <MetricCard icon={RadioTower} label="Active stations" value={String(data.activeStations)} hint="Reporting now" tone="good" />
         <MetricCard icon={TriangleAlert} label="Degraded/offline" value={String(data.degradedStations + data.offlineStations)} hint="Needs operator review" tone="warn" />
         <MetricCard icon={Server} label="Kafka lag" value={formatNumber(data.kafkaLag)} hint="Telemetry events pending" tone="warn" />
-        <MetricCard icon={Timer} label="p95 latency" value={`${data.p95LatencyMs} ms`} hint={`${data.requestRate} req/min`} />
-        <MetricCard icon={Gauge} label="Worst error today" value={`${data.worstErrorToday} m/s`} hint="Ryazan Field wind spike" tone="bad" />
+        <MetricCard icon={Timer} label="p95 latency" value={`${formatNumber(data.p95LatencyMs)} ms`} hint={`${formatNumber(data.requestRate)} req/min`} />
+        <MetricCard icon={Gauge} label="Worst error today" value={formatNumber(data.worstErrorToday)} hint="Max aggregated forecast error" tone="bad" />
         <MetricCard icon={Activity} label="SLO status" value="97.8%" hint="Forecast matching success" tone="good" />
       </div>
-      <Panel title="Error trend">
+      <Panel title={`${metricTitle} trend`}>
         <div className="chart-tall">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data.errorTrend}>
@@ -38,9 +40,9 @@ export function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ec" />
               <XAxis dataKey="date" tickLine={false} axisLine={false} tickFormatter={formatChartDate} minTickGap={24} />
               <YAxis tickLine={false} axisLine={false} />
-              <Tooltip labelFormatter={(value) => formatChartDate(String(value))} />
-              <Area type="monotone" dataKey="mae" stroke="#2f80ed" fill="url(#mae)" strokeWidth={2} />
-              <Area type="monotone" dataKey="rmse" stroke="#d64545" fill="transparent" strokeWidth={2} />
+              <Tooltip formatter={formatTooltipValue} labelFormatter={(value) => formatChartDate(String(value))} />
+              <Area type="monotone" dataKey="mae" name={filters.metric === "all" ? "Avg metric value" : metricTitle} stroke="#2f80ed" fill="url(#mae)" strokeWidth={2} />
+              {filters.metric === "all" ? <Area type="monotone" dataKey="rmse" name="Metric spread" stroke="#d64545" fill="transparent" strokeWidth={2} /> : null}
             </AreaChart>
           </ResponsiveContainer>
         </div>

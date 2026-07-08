@@ -31,12 +31,20 @@ type forecastFieldResponse struct {
 	Name string `json:"name"`
 }
 
+type metricDefinitionResponse struct {
+	ID              string `json:"id"`
+	ForecastFieldID string `json:"forecastFieldId"`
+	ForecastField   string `json:"forecastField"`
+	Name            string `json:"name"`
+}
+
 type stationResponse struct {
 	ID              string               `json:"id"`
 	Name            string               `json:"name"`
 	RegionID        string               `json:"regionId"`
 	Lat             float64              `json:"lat"`
 	Lon             float64              `json:"lon"`
+	IsActive        bool                 `json:"isActive"`
 	Status          domain.StationStatus `json:"status"`
 	ActiveSensors   int                  `json:"activeSensors"`
 	MaxError        float64              `json:"maxError"`
@@ -65,6 +73,7 @@ type forecastErrorRowResponse struct {
 	StationID     string        `json:"stationId"`
 	StationName   string        `json:"stationName"`
 	RegionName    string        `json:"regionName"`
+	Parameter     string        `json:"parameter"`
 	Metric        domain.Metric `json:"metric"`
 	ForecastValue float64       `json:"forecastValue"`
 	ActualValue   float64       `json:"actualValue"`
@@ -170,6 +179,19 @@ func toForecastFieldResponses(fields []domain.ForecastField) []forecastFieldResp
 	return out
 }
 
+func toMetricDefinitionResponses(metrics []domain.MetricDefinition) []metricDefinitionResponse {
+	out := make([]metricDefinitionResponse, 0, len(metrics))
+	for _, metric := range metrics {
+		out = append(out, metricDefinitionResponse{
+			ID:              metric.ID,
+			ForecastFieldID: metric.ForecastFieldID,
+			ForecastField:   metric.ForecastField,
+			Name:            metric.Name,
+		})
+	}
+	return out
+}
+
 func toStationResponses(stations []domain.Station) []stationResponse {
 	out := make([]stationResponse, 0, len(stations))
 	for _, station := range stations {
@@ -179,6 +201,7 @@ func toStationResponses(stations []domain.Station) []stationResponse {
 			RegionID:        station.RegionID,
 			Lat:             station.Lat,
 			Lon:             station.Lon,
+			IsActive:        station.IsActive,
 			Status:          station.Status,
 			ActiveSensors:   station.ActiveSensors,
 			MaxError:        station.MaxError,
@@ -217,6 +240,7 @@ func toForecastErrorRowResponses(rows []domain.ForecastErrorRow) []forecastError
 			StationID:     row.StationID,
 			StationName:   row.StationName,
 			RegionName:    row.RegionName,
+			Parameter:     row.Parameter,
 			Metric:        row.Metric,
 			ForecastValue: row.ForecastValue,
 			ActualValue:   row.ActualValue,

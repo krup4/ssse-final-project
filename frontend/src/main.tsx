@@ -6,7 +6,7 @@ import { router } from "./app/router";
 import "./styles.css";
 
 async function enableMocks() {
-  if (import.meta.env.VITE_ENABLE_MOCKS === "false") {
+  if (import.meta.env.VITE_ENABLE_MOCKS !== "true") {
     return;
   }
   const { worker } = await import("./mocks/browser");

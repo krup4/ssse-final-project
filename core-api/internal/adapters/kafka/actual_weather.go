@@ -166,7 +166,6 @@ type jsonActualWeatherPayload struct {
 	StationID          string    `json:"stationId"`
 	ObservedAt         time.Time `json:"observedAt"`
 	Temperature        *float64  `json:"temperature"`
-	PrecipitationTotal *float64  `json:"precipitationTotal"`
 	WindSpeed          *float64  `json:"windSpeed"`
 	WindGust           *float64  `json:"windGust"`
 	Humidity           *float64  `json:"humidity"`
@@ -196,7 +195,6 @@ func (d JSONActualWeatherDecoder) Decode(message kafka.Message) (domain.ActualWe
 		}
 	}
 	add(domain.ParameterTemperature, payload.Temperature)
-	add(domain.ParameterPrecipitation, payload.PrecipitationTotal)
 	add(domain.ParameterWindSpeed, payload.WindSpeed)
 	add(domain.ParameterWindGust, payload.WindGust)
 	add(domain.ParameterHumidity, payload.Humidity)

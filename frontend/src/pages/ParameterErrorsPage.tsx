@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { SlidersHorizontal } from "lucide-react";
-import { weatherParameterLabels, weatherParameterUnits } from "../entities/labels";
+import { metricLabels, weatherParameterLabels, weatherParameterUnits } from "../entities/labels";
 import type { WeatherParameterKey } from "../entities/types";
 import { useFilters } from "../features/filters/FiltersContext";
 import { api } from "../shared/api/endpoints";
-import { formatChartDate, formatDateTime, formatNumber } from "../shared/lib/format";
+import { formatChartDate, formatDateTime, formatNumber, formatTooltipValue } from "../shared/lib/format";
 import { Panel } from "../shared/ui/Panel";
 
 function optionLabel(parameter: WeatherParameterKey | "all") {
@@ -18,19 +18,25 @@ function unitLabel(parameter: WeatherParameterKey) {
 }
 
 export function ParameterErrorsPage() {
-  const [parameter, setParameter] = useState<WeatherParameterKey | "all">("all");
   const { filters } = useFilters();
+  const [parameter, setParameter] = useState<WeatherParameterKey | "all">("all");
   const { data: fields = [] } = useQuery({ queryKey: ["forecast-fields"], queryFn: api.forecastFields });
-  const parameterOptions = useMemo<Array<WeatherParameterKey | "all">>(
-    () => ["all", ...fields.map((field) => field.name)],
-    [fields]
-  );
+  const parameterOptions = useMemo<Array<WeatherParameterKey | "all">>(() => {
+    if (filters.field !== "all") {
+      return ["all", filters.field];
+    }
+    return ["all", ...fields.map((field) => field.name)];
+  }, [fields, filters.field]);
+  const selectedParameterLabel = optionLabel(parameter);
+  const globalFieldLabel = filters.field === "all" ? "All parameters" : (weatherParameterLabels[filters.field] ?? filters.field);
+  const globalMetricLabel = filters.metric === "all" ? "All metrics" : (metricLabels[filters.metric] ?? filters.metric);
 
   useEffect(() => {
     if (!parameterOptions.includes(parameter)) {
       setParameter("all");
     }
   }, [parameter, parameterOptions]);
+
   const { data = [] } = useQuery({
     queryKey: ["parameter-errors", parameter, filters],
     queryFn: () => api.parameterErrors(parameter, filters)
@@ -101,27 +107,30 @@ export function ParameterErrorsPage() {
         action={
           <div className="panel-action-label">
             <SlidersHorizontal size={16} />
-            Parameter details
+            {selectedParameterLabel}
           </div>
         }
       >
-        <div className="segmented-control" role="tablist" aria-label="Weather parameters">
-          {parameterOptions.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={option === parameter ? "active" : ""}
-              onClick={() => setParameter(option)}
-            >
-              {optionLabel(option)}
-            </button>
-          ))}
+        <div className="parameter-filter-stack">
+          <div className="parameter-filter-note">Global parameter: {globalFieldLabel} · Metric: {globalMetricLabel}</div>
+          <div className="segmented-control" role="tablist" aria-label="Weather parameters">
+            {parameterOptions.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={option === parameter ? "active" : ""}
+                onClick={() => setParameter(option)}
+              >
+                {optionLabel(option)}
+              </button>
+            ))}
+          </div>
         </div>
       </Panel>
 
       <div className="parameter-summary-grid">
         <section className="parameter-summary">
-          <span>Worst parameter error</span>
+          <span>Worst parameter metric</span>
           <strong>{worstRow ? formatNumber(worstRow.absoluteError) : "0"}</strong>
           <p>{worstRow ? `${optionLabel(worstRow.parameter)} at ${worstRow.stationName}` : "No data"}</p>
         </section>
@@ -138,30 +147,30 @@ export function ParameterErrorsPage() {
       </div>
 
       <div className="page-grid two-columns">
-        <Panel title="Contribution by parameter">
+        <Panel title={`Contribution by parameter (${globalMetricLabel})`}>
           <div className="chart-tall">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={summaryRows}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ec" />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} angle={-18} textAnchor="end" height={78} />
                 <YAxis tickLine={false} axisLine={false} />
-                <Tooltip />
+                <Tooltip formatter={formatTooltipValue} />
                 <Bar dataKey="contributionPct" name="Contribution, %" fill="#2f80ed" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </Panel>
 
-        <Panel title={parameter === "all" ? "Aggregate error trend" : `${optionLabel(parameter)} error trend`}>
+        <Panel title={parameter === "all" ? `Aggregate ${globalMetricLabel} trend` : `${optionLabel(parameter)} ${globalMetricLabel} trend`}>
           <div className="chart-tall">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trendRows}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#d9e2ec" />
                 <XAxis dataKey="timestamp" tickLine={false} axisLine={false} tickFormatter={formatChartDate} minTickGap={24} />
                 <YAxis tickLine={false} axisLine={false} />
-                <Tooltip labelFormatter={(value) => formatChartDate(String(value))} />
-                <Line type="monotone" dataKey="absoluteError" name="Max absolute error" stroke="#d64545" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="mae" name="MAE" stroke="#2f80ed" strokeWidth={2} dot={false} />
+                <Tooltip formatter={formatTooltipValue} labelFormatter={(value) => formatChartDate(String(value))} />
+                <Line type="monotone" dataKey="absoluteError" name={`Max ${globalMetricLabel}`} stroke="#d64545" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="mae" name={`Avg ${globalMetricLabel}`} stroke="#2f80ed" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -177,8 +186,7 @@ export function ParameterErrorsPage() {
                   <th>Parameter</th>
                   <th>Station</th>
                   <th>Forecast</th>
-                  <th>Actual</th>
-                  <th>Error</th>
+                  <th>{globalMetricLabel}</th>
                   <th>Contribution</th>
                 </tr>
               </thead>
@@ -188,7 +196,6 @@ export function ParameterErrorsPage() {
                     <td>{optionLabel(row.parameter)}</td>
                     <td>{row.stationName}</td>
                     <td>{formatNumber(row.forecastValue)} {unitLabel(row.parameter)}</td>
-                    <td>{formatNumber(row.actualValue)} {unitLabel(row.parameter)}</td>
                     <td><strong>{formatNumber(row.absoluteError)}</strong></td>
                     <td>{formatNumber(row.contributionPct)}%</td>
                   </tr>
@@ -207,9 +214,8 @@ export function ParameterErrorsPage() {
                 <th>Parameter</th>
                 <th>Station</th>
                 <th>Forecast</th>
-                <th>Actual</th>
-                <th>Abs. error</th>
-                <th>Error %</th>
+                <th>{globalMetricLabel}</th>
+                <th>Metric %</th>
                 <th>Samples</th>
                 <th>Observed</th>
               </tr>
@@ -220,7 +226,6 @@ export function ParameterErrorsPage() {
                   <td>{optionLabel(row.parameter)}</td>
                   <td>{row.stationName}</td>
                   <td>{formatNumber(row.forecastValue)} {unitLabel(row.parameter)}</td>
-                  <td>{formatNumber(row.actualValue)} {unitLabel(row.parameter)}</td>
                   <td><strong>{formatNumber(row.absoluteError)}</strong></td>
                   <td>{formatNumber(row.errorPct)}%</td>
                   <td>{row.samples.toLocaleString("en")}</td>

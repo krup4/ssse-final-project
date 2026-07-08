@@ -18,10 +18,13 @@ type RegionRepository interface {
 
 type ForecastFieldRepository interface {
 	ListWithArchiveData(ctx context.Context) ([]ForecastField, error)
+	ListMetrics(ctx context.Context) ([]MetricDefinition, error)
 }
 
 type StationRepository interface {
 	List(ctx context.Context, regionID string, status StationStatus) ([]Station, error)
+	Create(ctx context.Context, input StationInput) (Station, error)
+	Update(ctx context.Context, id string, input StationInput) (Station, error)
 }
 
 type AnalyticsRepository interface {

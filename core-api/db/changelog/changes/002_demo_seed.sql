@@ -17,12 +17,13 @@ JOIN roles ON roles.name = rows.role_name
 ON CONFLICT (login) DO NOTHING;
 
 INSERT INTO forecast_fields (name)
-VALUES ('temperature'), ('wind_speed'), ('humidity'), ('pressure'), ('precipitation'), ('wind_gust')
+VALUES ('temperature'), ('wind_speed'), ('humidity'), ('pressure'), ('wind_gust')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO metrics (forecast_field_id, name)
-SELECT id, name
+SELECT forecast_fields.id, metric_names.name
 FROM forecast_fields
+CROSS JOIN (VALUES ('mae'), ('mse'), ('rmse')) AS metric_names(name)
 ON CONFLICT (forecast_field_id, name) DO NOTHING;
 
 INSERT INTO stations (id, name, lon, lat, is_active)
@@ -41,7 +42,7 @@ WITH station_list AS (
 field_list AS (
     SELECT id AS field_id, name, row_number() OVER (ORDER BY id) - 1 AS metric_idx
     FROM forecast_fields
-    WHERE name IN ('temperature', 'wind_speed', 'humidity', 'pressure', 'precipitation')
+    WHERE name IN ('temperature', 'wind_speed', 'humidity', 'pressure')
 ),
 hours AS (
     SELECT generate_series(0, 35) AS h
@@ -69,10 +70,15 @@ WITH station_list AS (
     FROM stations
 ),
 metric_list AS (
-    SELECT m.id AS metric_id, ff.name, row_number() OVER (ORDER BY m.id) - 1 AS metric_idx
+    SELECT
+        m.id AS metric_id,
+        m.name AS metric_name,
+        ff.name AS field_name,
+        dense_rank() OVER (ORDER BY ff.id) - 1 AS field_idx
     FROM metrics m
     JOIN forecast_fields ff ON ff.id = m.forecast_field_id
-    WHERE ff.name IN ('temperature', 'wind_speed', 'humidity', 'pressure', 'precipitation')
+    WHERE ff.name IN ('temperature', 'wind_speed', 'humidity', 'pressure')
+      AND m.name IN ('mae', 'mse', 'rmse')
 ),
 hours AS (
     SELECT generate_series(0, 35) AS h
@@ -81,16 +87,24 @@ points AS (
     SELECT
         s.station_id,
         m.metric_id,
-        m.metric_idx,
+        m.metric_name,
+        m.field_idx,
         h.h,
         date_trunc('hour', now()) - (h.h || ' hours')::interval AS ts,
-        10 + (m.metric_idx * 7) + (h.h % 5) + (((h.h + m.metric_idx) % 9) - 4) AS actual_value
+        abs(((h.h + m.field_idx) % 9) - 4) AS absolute_error
     FROM station_list s
     CROSS JOIN metric_list m
     CROSS JOIN hours h
 )
 INSERT INTO archive (dt, station_id, metric_id, value)
-SELECT ts, station_id, metric_id, actual_value
+SELECT
+    ts,
+    station_id,
+    metric_id,
+    CASE
+        WHEN metric_name = 'mse' THEN absolute_error * absolute_error
+        ELSE absolute_error
+    END
 FROM points;
 
 INSERT INTO alerts (id, title, source, severity, status, started_at, updated_at)

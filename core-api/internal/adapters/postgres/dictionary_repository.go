@@ -29,3 +29,24 @@ func (r *ForecastFieldRepository) ListWithArchiveData(ctx context.Context) ([]do
 	}
 	return out, nil
 }
+
+func (r *ForecastFieldRepository) ListMetrics(ctx context.Context) ([]domain.MetricDefinition, error) {
+	var models []MetricModel
+	err := r.db.WithContext(ctx).
+		Preload("ForecastField").
+		Order("name").
+		Find(&models).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.MetricDefinition, 0, len(models))
+	for _, model := range models {
+		out = append(out, domain.MetricDefinition{
+			ID:              strconv.Itoa(model.ID),
+			ForecastFieldID: strconv.Itoa(model.ForecastFieldID),
+			ForecastField:   model.ForecastField.Name,
+			Name:            model.Name,
+		})
+	}
+	return out, nil
+}

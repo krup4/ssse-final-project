@@ -5,7 +5,7 @@ function dateInputValue(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-function defaultFilters(): AnalyticsFilters {
+export function defaultFilters(): AnalyticsFilters {
   const dateTo = new Date();
   const dateFrom = new Date(dateTo);
   dateFrom.setUTCDate(dateTo.getUTCDate() - 180);
@@ -13,7 +13,8 @@ function defaultFilters(): AnalyticsFilters {
     dateFrom: dateInputValue(dateFrom),
     dateTo: dateInputValue(dateTo),
     stationId: "all",
-    metric: "wind_speed"
+    field: "all",
+    metric: "all"
   };
 }
 

@@ -22,6 +22,7 @@ declare global {
       state: { center: [number, number]; zoom: number; controls?: string[] },
       options?: Record<string, unknown>
     ) => YandexMap;
+    Clusterer: new (options?: Record<string, unknown>) => YandexClusterer;
     Placemark: new (
       coordinates: [number, number],
       properties: Record<string, unknown>,
@@ -38,6 +39,10 @@ declare global {
   }
 
   interface YandexGeoObject {}
+
+  interface YandexClusterer extends YandexGeoObject {
+    add: (objects: YandexGeoObject[]) => void;
+  }
 }
 
 export {};

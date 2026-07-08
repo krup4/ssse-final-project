@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDownUp } from "lucide-react";
-import { metricLabels, metricUnits } from "../entities/labels";
+import { metricLabels, weatherParameterLabels, weatherParameterUnits } from "../entities/labels";
 import { useFilters } from "../features/filters/FiltersContext";
 import { api } from "../shared/api/endpoints";
 import { formatDateTime, formatNumber } from "../shared/lib/format";
@@ -11,6 +11,7 @@ export function ErrorsPage() {
   const [descending, setDescending] = useState(true);
   const { filters } = useFilters();
   const { data = [] } = useQuery({ queryKey: ["worst-errors", filters], queryFn: () => api.worstErrors(filters) });
+  const metricTitle = filters.metric === "all" ? "Metric value" : (metricLabels[filters.metric] ?? filters.metric);
   const rows = useMemo(
     () => [...data].sort((a, b) => (descending ? b.absoluteError - a.absoluteError : a.absoluteError - b.absoluteError)),
     [data, descending]
@@ -31,10 +32,10 @@ export function ErrorsPage() {
             <thead>
               <tr>
                 <th>Station</th>
+                <th>Parameter</th>
                 <th>Metric</th>
                 <th>Forecast</th>
-                <th>Actual</th>
-                <th>Abs. error</th>
+                <th>{metricTitle}</th>
                 <th>Observed</th>
               </tr>
             </thead>
@@ -42,9 +43,9 @@ export function ErrorsPage() {
               {rows.map((row) => (
                 <tr key={row.id}>
                   <td>{row.stationName}</td>
-                  <td>{metricLabels[row.metric]}</td>
-                  <td>{formatNumber(row.forecastValue)} {metricUnits[row.metric]}</td>
-                  <td>{formatNumber(row.actualValue)} {metricUnits[row.metric]}</td>
+                  <td>{weatherParameterLabels[row.parameter] ?? row.parameter}</td>
+                  <td>{metricLabels[row.metric] ?? row.metric}</td>
+                  <td>{formatNumber(row.forecastValue)} {weatherParameterUnits[row.parameter] ?? ""}</td>
                   <td><strong>{formatNumber(row.absoluteError)}</strong></td>
                   <td>{formatDateTime(row.observedAt)}</td>
                 </tr>

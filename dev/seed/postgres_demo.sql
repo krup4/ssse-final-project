@@ -7,6 +7,11 @@ DELETE FROM forecasts WHERE station_id BETWEEN 101 AND 105;
 DELETE FROM alerts WHERE id LIKE 'dev-%';
 DELETE FROM backfill_jobs WHERE id LIKE 'dev-%';
 DELETE FROM stations WHERE id BETWEEN 101 AND 105;
+DELETE FROM archive
+USING metrics
+WHERE archive.metric_id = metrics.id
+  AND metrics.name NOT IN ('mae', 'mse', 'rmse');
+DELETE FROM metrics WHERE name NOT IN ('mae', 'mse', 'rmse');
 
 INSERT INTO roles (name)
 VALUES ('admin'), ('analyst'), ('operator'), ('viewer')
@@ -29,17 +34,18 @@ SET name = EXCLUDED.name,
     updated_at = now();
 
 INSERT INTO forecast_fields (name)
-VALUES ('temperature'), ('wind_speed'), ('humidity'), ('pressure'), ('precipitation'), ('wind_gust')
+VALUES ('temperature'), ('wind_speed'), ('humidity'), ('pressure'), ('wind_gust')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO metrics (forecast_field_id, name)
-SELECT id, name
+SELECT forecast_fields.id, metric_names.name
 FROM forecast_fields
+CROSS JOIN (VALUES ('mae'), ('mse'), ('rmse')) AS metric_names(name)
 WHERE NOT EXISTS (
     SELECT 1
     FROM metrics
     WHERE metrics.forecast_field_id = forecast_fields.id
-      AND metrics.name = forecast_fields.name
+      AND metrics.name = metric_names.name
 );
 
 INSERT INTO stations (id, name, lon, lat, is_active)
@@ -65,7 +71,7 @@ WITH station_list AS (
 field_list AS (
     SELECT id AS field_id, name, row_number() OVER (ORDER BY id) - 1 AS metric_idx
     FROM forecast_fields
-    WHERE name IN ('temperature', 'wind_speed', 'humidity', 'pressure', 'precipitation')
+    WHERE name IN ('temperature', 'wind_speed', 'humidity', 'pressure')
 ),
 hours AS (
     SELECT generate_series(0, 719) AS h
@@ -85,7 +91,6 @@ points AS (
               WHEN s.station_id = 101 AND f.name = 'wind_speed' AND h.h BETWEEN 0 AND 12 THEN 18
               WHEN s.station_id = 102 AND f.name = 'pressure' AND h.h BETWEEN 72 AND 120 THEN -14
               WHEN s.station_id = 103 AND f.name = 'temperature' AND h.h BETWEEN 168 AND 240 THEN 11
-              WHEN s.station_id = 104 AND f.name = 'precipitation' AND h.h BETWEEN 360 AND 432 THEN 16
               ELSE ((h.h + f.metric_idx + s.station_idx) % 9) - 4
             END AS actual_value
     FROM station_list s
@@ -102,10 +107,15 @@ WITH station_list AS (
     WHERE id BETWEEN 101 AND 105
 ),
 metric_list AS (
-    SELECT m.id AS metric_id, ff.name, row_number() OVER (ORDER BY m.id) - 1 AS metric_idx
+    SELECT
+        m.id AS metric_id,
+        m.name AS metric_name,
+        ff.name AS field_name,
+        dense_rank() OVER (ORDER BY ff.id) - 1 AS field_idx
     FROM metrics m
     JOIN forecast_fields ff ON ff.id = m.forecast_field_id
-    WHERE ff.name IN ('temperature', 'wind_speed', 'humidity', 'pressure', 'precipitation')
+    WHERE ff.name IN ('temperature', 'wind_speed', 'humidity', 'pressure')
+      AND m.name IN ('mae', 'mse', 'rmse')
 ),
 hours AS (
     SELECT generate_series(0, 719) AS h
@@ -115,24 +125,30 @@ points AS (
         s.station_id,
         s.station_idx,
         m.metric_id,
-        m.name,
-        m.metric_idx,
+        m.metric_name,
+        m.field_name,
+        m.field_idx,
         h.h,
         date_trunc('hour', now()) - (h.h || ' hours')::interval AS ts,
-        12 + (s.station_idx * 2) + (m.metric_idx * 6) + (h.h % 6)
-          + CASE
-              WHEN s.station_id = 101 AND m.name = 'wind_speed' AND h.h BETWEEN 0 AND 12 THEN 18
-              WHEN s.station_id = 102 AND m.name = 'pressure' AND h.h BETWEEN 72 AND 120 THEN -14
-              WHEN s.station_id = 103 AND m.name = 'temperature' AND h.h BETWEEN 168 AND 240 THEN 11
-              WHEN s.station_id = 104 AND m.name = 'precipitation' AND h.h BETWEEN 360 AND 432 THEN 16
-              ELSE ((h.h + m.metric_idx + s.station_idx) % 9) - 4
-            END AS actual_value
+        abs(CASE
+          WHEN s.station_id = 101 AND m.field_name = 'wind_speed' AND h.h BETWEEN 0 AND 12 THEN 18
+          WHEN s.station_id = 102 AND m.field_name = 'pressure' AND h.h BETWEEN 72 AND 120 THEN -14
+          WHEN s.station_id = 103 AND m.field_name = 'temperature' AND h.h BETWEEN 168 AND 240 THEN 11
+          ELSE ((h.h + m.field_idx + s.station_idx) % 9) - 4
+        END) AS absolute_error
     FROM station_list s
     CROSS JOIN metric_list m
     CROSS JOIN hours h
 )
 INSERT INTO archive (dt, station_id, metric_id, value)
-SELECT ts, station_id, metric_id, actual_value
+SELECT
+    ts,
+    station_id,
+    metric_id,
+    CASE
+        WHEN metric_name = 'mse' THEN absolute_error * absolute_error
+        ELSE absolute_error
+    END
 FROM points
 ON CONFLICT (station_id, metric_id, dt) DO UPDATE
 SET value = EXCLUDED.value;
@@ -145,7 +161,7 @@ WITH station_list AS (
 field_list AS (
     SELECT id AS field_id, name, row_number() OVER (ORDER BY id) - 1 AS metric_idx
     FROM forecast_fields
-    WHERE name IN ('temperature', 'wind_speed', 'humidity', 'pressure', 'precipitation')
+    WHERE name IN ('temperature', 'wind_speed', 'humidity', 'pressure')
 ),
 days AS (
     SELECT generate_series(31, 90) AS d
@@ -165,7 +181,6 @@ points AS (
               WHEN s.station_id = 101 AND f.name = 'wind_speed' AND d.d BETWEEN 31 AND 45 THEN 9
               WHEN s.station_id = 102 AND f.name = 'pressure' AND d.d BETWEEN 46 AND 60 THEN -12
               WHEN s.station_id = 103 AND f.name = 'temperature' AND d.d BETWEEN 61 AND 75 THEN 7
-              WHEN s.station_id = 104 AND f.name = 'precipitation' AND d.d BETWEEN 76 AND 90 THEN 13
               ELSE ((d.d + f.metric_idx + s.station_idx) % 7) - 3
             END AS actual_value
     FROM station_list s
@@ -182,10 +197,15 @@ WITH station_list AS (
     WHERE id BETWEEN 101 AND 104
 ),
 metric_list AS (
-    SELECT m.id AS metric_id, ff.name, row_number() OVER (ORDER BY m.id) - 1 AS metric_idx
+    SELECT
+        m.id AS metric_id,
+        m.name AS metric_name,
+        ff.name AS field_name,
+        dense_rank() OVER (ORDER BY ff.id) - 1 AS field_idx
     FROM metrics m
     JOIN forecast_fields ff ON ff.id = m.forecast_field_id
-    WHERE ff.name IN ('temperature', 'wind_speed', 'humidity', 'pressure', 'precipitation')
+    WHERE ff.name IN ('temperature', 'wind_speed', 'humidity', 'pressure')
+      AND m.name IN ('mae', 'mse', 'rmse')
 ),
 days AS (
     SELECT generate_series(31, 90) AS d
@@ -195,24 +215,30 @@ points AS (
         s.station_id,
         s.station_idx,
         m.metric_id,
-        m.name,
-        m.metric_idx,
+        m.metric_name,
+        m.field_name,
+        m.field_idx,
         d.d,
         date_trunc('day', now()) - (d.d || ' days')::interval + interval '12 hours' AS ts,
-        9 + (s.station_idx * 1.7) + (m.metric_idx * 5.5) + (d.d % 7)
-          + CASE
-              WHEN s.station_id = 101 AND m.name = 'wind_speed' AND d.d BETWEEN 31 AND 45 THEN 9
-              WHEN s.station_id = 102 AND m.name = 'pressure' AND d.d BETWEEN 46 AND 60 THEN -12
-              WHEN s.station_id = 103 AND m.name = 'temperature' AND d.d BETWEEN 61 AND 75 THEN 7
-              WHEN s.station_id = 104 AND m.name = 'precipitation' AND d.d BETWEEN 76 AND 90 THEN 13
-              ELSE ((d.d + m.metric_idx + s.station_idx) % 7) - 3
-            END AS actual_value
+        abs(CASE
+          WHEN s.station_id = 101 AND m.field_name = 'wind_speed' AND d.d BETWEEN 31 AND 45 THEN 9
+          WHEN s.station_id = 102 AND m.field_name = 'pressure' AND d.d BETWEEN 46 AND 60 THEN -12
+          WHEN s.station_id = 103 AND m.field_name = 'temperature' AND d.d BETWEEN 61 AND 75 THEN 7
+          ELSE ((d.d + m.field_idx + s.station_idx) % 7) - 3
+        END) AS absolute_error
     FROM station_list s
     CROSS JOIN metric_list m
     CROSS JOIN days d
 )
 INSERT INTO archive (dt, station_id, metric_id, value)
-SELECT ts, station_id, metric_id, actual_value
+SELECT
+    ts,
+    station_id,
+    metric_id,
+    CASE
+        WHEN metric_name = 'mse' THEN absolute_error * absolute_error
+        ELSE absolute_error
+    END
 FROM points
 ON CONFLICT (station_id, metric_id, dt) DO UPDATE
 SET value = EXCLUDED.value;
@@ -245,8 +271,8 @@ INSERT INTO backfill_jobs (
     finished_at
 )
 VALUES
-    ('dev-backfill-completed', 'completed', now() - interval '7 days', now() - interval '1 day', '101', 'wind_speed', 'dev-calc-v1', 100, 840, 0, now() - interval '1 day', now() - interval '1 day', now() - interval '23 hours'),
-    ('dev-backfill-running', 'running', now() - interval '3 days', now(), '102', 'pressure', 'dev-calc-v2', 63, 420, 3, now() - interval '30 minutes', now() - interval '20 minutes', null)
+    ('dev-backfill-completed', 'completed', now() - interval '7 days', now() - interval '1 day', '101', 'mae', 'dev-calc-v1', 100, 840, 0, now() - interval '1 day', now() - interval '1 day', now() - interval '23 hours'),
+    ('dev-backfill-running', 'running', now() - interval '3 days', now(), '102', 'rmse', 'dev-calc-v2', 63, 420, 3, now() - interval '30 minutes', now() - interval '20 minutes', null)
 ON CONFLICT (id) DO UPDATE
 SET status = EXCLUDED.status,
     date_from = EXCLUDED.date_from,

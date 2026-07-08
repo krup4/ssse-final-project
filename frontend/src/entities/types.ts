@@ -1,6 +1,6 @@
 export type UserRole = "admin" | "analyst" | "operator" | "viewer";
 
-export type MetricKey = "temperature" | "wind_speed" | "humidity" | "pressure" | "precipitation";
+export type MetricKey = string;
 
 export type WeatherParameterKey = string;
 
@@ -25,15 +25,30 @@ export interface Station {
   name: string;
   lat: number;
   lon: number;
+  isActive: boolean;
   status: StationStatus;
   activeSensors: number;
   maxError: number;
   lastTelemetryAt: string;
 }
 
+export interface StationInput {
+  name: string;
+  lat: number;
+  lon: number;
+  isActive: boolean;
+}
+
 export interface ForecastField {
   id: string;
   name: WeatherParameterKey;
+}
+
+export interface MetricDefinition {
+  id: string;
+  forecastFieldId: string;
+  forecastField: WeatherParameterKey;
+  name: MetricKey;
 }
 
 export interface OverviewMetrics {
@@ -51,6 +66,7 @@ export interface ForecastErrorRow {
   id: string;
   stationId: string;
   stationName: string;
+  parameter: WeatherParameterKey;
   metric: MetricKey;
   forecastValue: number;
   actualValue: number;
@@ -120,5 +136,6 @@ export interface AnalyticsFilters {
   dateFrom: string;
   dateTo: string;
   stationId: string;
+  field: WeatherParameterKey | "all";
   metric: MetricKey;
 }

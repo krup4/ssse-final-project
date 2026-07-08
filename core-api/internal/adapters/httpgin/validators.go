@@ -11,26 +11,6 @@ func validRole(role domain.UserRole) bool {
 	}
 }
 
-func validMetric(metric domain.Metric) bool {
-	switch metric {
-	case domain.MetricTemperature, domain.MetricWindSpeed, domain.MetricHumidity, domain.MetricPressure, domain.MetricPrecipitation:
-		return true
-	default:
-		return false
-	}
-}
-
-func validParameter(parameter domain.WeatherParameter) bool {
-	switch parameter {
-	case domain.ParameterTemperature, domain.ParameterPrecipitation, domain.ParameterWindSpeed, domain.ParameterWindGust, domain.ParameterHumidity, domain.ParameterPressure:
-		return true
-	case domain.WeatherParameter("precipitation"):
-		return true
-	default:
-		return false
-	}
-}
-
 func validBucket(bucket domain.TimeBucket) bool {
 	switch bucket {
 	case domain.Bucket1H, domain.Bucket3H, domain.Bucket6H, domain.Bucket1D:

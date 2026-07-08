@@ -178,7 +178,6 @@ Backfill jobs публикуются в Kafka topic `backfill.jobs.v1`, чтоб
   "windSpeed": 12.1,
   "humidity": 71,
   "pressure": 1009,
-  "precipitationTotal": 0.2,
   "source": "sensor-gateway",
   "traceId": "trace-1"
 }
