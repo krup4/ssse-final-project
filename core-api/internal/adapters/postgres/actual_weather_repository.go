@@ -28,6 +28,6 @@ func (r *ActualWeatherRepository) SaveReading(ctx context.Context, reading domai
 	}
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"temperature_min", "temperature_max", "precipitation_total", "wind_speed", "wind_gust", "humidity", "pressure", "raw_payload", "created_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"temperature", "precipitation_total", "wind_speed", "wind_gust", "humidity", "pressure", "raw_payload", "created_at"}),
 	}).Create(&model).Error
 }

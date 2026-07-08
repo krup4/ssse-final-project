@@ -50,8 +50,7 @@ type ActualWeatherReadingModel struct {
 	ID                 string    `gorm:"primaryKey;size:120"`
 	StationID          string    `gorm:"not null;index:idx_actual_station_observed,priority:1"`
 	ObservedAt         time.Time `gorm:"not null;index:idx_actual_station_observed,priority:2"`
-	TemperatureMin     *float64
-	TemperatureMax     *float64
+	Temperature        *float64
 	PrecipitationTotal *float64
 	WindSpeed          *float64
 	WindGust           *float64

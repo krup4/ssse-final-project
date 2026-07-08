@@ -11,7 +11,7 @@ import (
 func setActualMetric(model *ActualWeatherReadingModel, metric string, value float64) {
 	switch metric {
 	case "temperature":
-		model.TemperatureMax = &value
+		model.Temperature = &value
 	case "wind_speed":
 		model.WindSpeed = &value
 	case "humidity":
@@ -25,10 +25,8 @@ func setActualMetric(model *ActualWeatherReadingModel, metric string, value floa
 
 func setParameter(model *ActualWeatherReadingModel, parameter domain.WeatherParameter, value float64) {
 	switch parameter {
-	case domain.ParameterTemperatureMin:
-		model.TemperatureMin = &value
-	case domain.ParameterTemperatureMax:
-		model.TemperatureMax = &value
+	case domain.ParameterTemperature:
+		model.Temperature = &value
 	case domain.ParameterPrecipitation:
 		model.PrecipitationTotal = &value
 	case domain.ParameterWindSpeed:

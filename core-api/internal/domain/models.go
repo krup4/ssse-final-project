@@ -24,13 +24,12 @@ const (
 type WeatherParameter string
 
 const (
-	ParameterTemperatureMin WeatherParameter = "temperature_min"
-	ParameterTemperatureMax WeatherParameter = "temperature_max"
-	ParameterPrecipitation  WeatherParameter = "precipitation_total"
-	ParameterWindSpeed      WeatherParameter = "wind_speed"
-	ParameterWindGust       WeatherParameter = "wind_gust"
-	ParameterHumidity       WeatherParameter = "humidity"
-	ParameterPressure       WeatherParameter = "pressure"
+	ParameterTemperature   WeatherParameter = "temperature"
+	ParameterPrecipitation WeatherParameter = "precipitation_total"
+	ParameterWindSpeed     WeatherParameter = "wind_speed"
+	ParameterWindGust      WeatherParameter = "wind_gust"
+	ParameterHumidity      WeatherParameter = "humidity"
+	ParameterPressure      WeatherParameter = "pressure"
 )
 
 type StationStatus string

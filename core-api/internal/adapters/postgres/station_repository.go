@@ -6,6 +6,11 @@ import (
 	"weather-accuracy/core-api/internal/domain"
 )
 
+type stationErrorValue struct {
+	ForecastValue float64
+	ActualValue   float64
+}
+
 func (r *StationRepository) List(ctx context.Context, regionID string, status domain.StationStatus) ([]domain.Station, error) {
 	query := r.db.WithContext(ctx).Model(&StationModel{})
 	if regionID != "" && regionID != "all" {
@@ -30,15 +35,23 @@ func (r *StationRepository) List(ctx context.Context, regionID string, status do
 			ActiveSensors:   model.ActiveSensors,
 			LastTelemetryAt: model.LastTelemetryAt,
 		}
+		var values []stationErrorValue
 		_ = r.db.WithContext(ctx).Raw(`
-			select coalesce(max(abs(f.value - v.actual_value)), 0)
+			select f.value as forecast_value,
+			       v.actual_value
 			from forecast_reading_models f
 			join actual_weather_reading_models a on a.station_id = f.station_id and a.observed_at = f.target_at
 			join lateral (
 				select unnest(array['temperature','wind_speed','humidity','pressure','precipitation']) metric,
-				       unnest(array[a.temperature_max,a.wind_speed,a.humidity,a.pressure,a.precipitation_total]) actual_value
+				       unnest(array[a.temperature,a.wind_speed,a.humidity,a.pressure,a.precipitation_total]) actual_value
 			) v on v.metric = f.metric and v.actual_value is not null
-			where f.station_id = ?`, model.ID).Scan(&station.MaxError).Error
+			where f.station_id = ?`, model.ID).Scan(&values).Error
+		for _, value := range values {
+			absoluteError, _ := calculateError(value.ForecastValue, value.ActualValue)
+			if absoluteError > station.MaxError {
+				station.MaxError = absoluteError
+			}
+		}
 		out = append(out, station)
 	}
 	return out, nil

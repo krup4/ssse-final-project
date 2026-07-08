@@ -173,7 +173,7 @@ Backfill jobs публикуются в Kafka topic `backfill.jobs.v1`, чтоб
   "id": "sensor-event-1",
   "stationId": "st-004",
   "observedAt": "2026-07-08T06:00:00Z",
-  "temperatureMax": 29.3,
+  "temperature": 29.3,
   "windSpeed": 12.1,
   "humidity": 71,
   "pressure": 1009,

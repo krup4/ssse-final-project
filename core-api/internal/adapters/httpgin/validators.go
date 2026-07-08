@@ -22,7 +22,7 @@ func validMetric(metric domain.Metric) bool {
 
 func validParameter(parameter domain.WeatherParameter) bool {
 	switch parameter {
-	case domain.ParameterTemperatureMin, domain.ParameterTemperatureMax, domain.ParameterPrecipitation, domain.ParameterWindSpeed, domain.ParameterWindGust, domain.ParameterHumidity, domain.ParameterPressure:
+	case domain.ParameterTemperature, domain.ParameterPrecipitation, domain.ParameterWindSpeed, domain.ParameterWindGust, domain.ParameterHumidity, domain.ParameterPressure:
 		return true
 	default:
 		return false
