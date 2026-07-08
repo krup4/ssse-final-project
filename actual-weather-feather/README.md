@@ -1,97 +1,91 @@
 # Actual Weather Service (Python)
 
-Actual Weather Service переписывается на **Python** для выполнения тех же задач, что и исходный Go-сервис:
-- собирать фактические погодные данные Open-Meteo;
-- сохранять их в PostgreSQL;
-- сохранять события в Kafka;
-- экспонировать health/metrics и CRUD-интерфейс управления станциями.
+Микросервис получает фактические метеоданные из API Яндекс.Погоды и публикует их в Kafka (`weather.actual`). Он не сохраняет измерения в PostgreSQL (в базе читается только таблица `stations`), не выполняет сравнение с прогнозами и не взаимодействует с аналитикой напрямую — всё происходит через Kafka.
 
-> В этом репозитории пока только документация по новому стеку. Реализация должна базироваться на описанной архитектуре и быть написана другим агентом.
+## Что делает сервис
 
----
+1. Загружает `stations` (поля `id`, `name`, `lat`, `lon`, опционально фильтруя по `name`) из PostgreSQL.
+2. По списку станций обращается к Яндекс.Погоде, получает `fact` и маппит его в `WeatherMeasurement`.
+3. Дедуплицирует данные по Redis (`station:{id}:last_timestamp`).
+4. Публикует событие-контейнер `WeatherKafkaMessage` в топик `weather.actual`.
+5. Зацикливает сбор на интервале (`UPDATE_INTERVAL`) и логгирует ключевые шаги (запуск цикла, количество станций, запросы к API, публикации в Kafka, ошибки).
 
-## Быстрый старт для следующего агента
+## Архитектура компонентов
 
-1. Убедитесь, что у вас установлен Python **3.12+**, Docker и docker-compose.
-2. Создайте виртуальное окружение и установите зависимости (в будущем будет `requirements.txt` / `pyproject.toml`).
+- `Scheduler` (`app/scheduler`) — запускает `WeatherService.collect_for_station` по расписанию (`UPDATE_INTERVAL`, по умолчанию 3600 секунд), параллелит сбор до N станций.
+- `StationRepository` (`app/repositories/station.py`) — читает список активных станций из PostgreSQL.
+- `YandexWeatherClient` (`app/clients/yandex_weather.py`) — делает требование к `https://api.weather.yandex.ru/v2/informers?lat=...&lon=...`, обрабатывает `fact`.
+- `WeatherService` (`app/services/weather.py`) — валидация, дедупликация, подготовка Kafka-сообщения и публикация, без записи в базу.
+- `KafkaPublisher` (`app/core/kafka.py`) — публикует данные в `weather.actual`.
+- `RedisClient` (`app/core/redis_client.py`) — хранит метку последнего таймстампа для каждой станции.
+- `API` (`app/api/routes`) — health/metrics и CRUD станций остаются для операторского управления, но фактические данные проходят только через Kafka.
 
-```bash README.md
-python -m venv .venv
-source .venv/bin/activate  # или .\.venv\Scripts\Activate.ps1 на Windows
-pip install -r requirements.txt  # файл пока пуст, но placeholder должен быть
+## Источник данных и поток
+
+```
+Scheduler
+    │
+    ▼
+Получить активные станции (PostgreSQL)
+    │
+    ▼
+API Яндекс.Погоды (fact)
+    │
+    ▼
+Дедупликация в Redis
+    │
+    ▼
+Kafka (topic `weather.actual`)
+    │
+    ▼
+Analytics Service (подписчики)
 ```
 
-3. Локальная инфраструктура поднимается через существующий docker-compose (Postgres, Kafka, Redis). Обновить сервис, чтобы он использовал новый Python-образ и команды из секции `app/`.
+## Переменные окружения (в `.env`)
 
-```bash README.md
-docker compose up --build
+```
+DATABASE_URL=postgresql://postgres:password@postgres:5432/weather?sslmode=disable
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=password
+POSTGRES_DB=weather
+KAFKA_BROKERS=kafka:9092
+KAFKA_TOPIC=weather.actual
+REDIS_URL=redis://redis:6379/0
+YANDEX_WEATHER_API_KEY=replace_me
+YANDEX_WEATHER_URL=https://api.weather.yandex.ru/v2/informers
+REQUEST_TIMEOUT=10.0
+UPDATE_INTERVAL=3600
+STATION_NAME_FILTER=
+LOG_LEVEL=INFO
 ```
 
-4. Основной HTTP-сервер будет запускаться через `uvicorn app.main:app --reload --host 0.0.0.0 --port ${PORT}`.
+`UPDATE_INTERVAL` регулирует частоту циклов (секунды). `REQUEST_TIMEOUT` задаёт таймаут HTTP-клиента (секунды). `STATION_NAME_FILTER` позволяет фильтровать станции по имени вместо использования флага `active`. Compose проксиирует внешний порт 8082 на контейнерный 8080.
 
----
+## Логирование и метрики
 
-## Архитектура и конвенции
+- Логируются: запуск цикла, количество активных станций, каждый запрос к API Яндекс.Погоды, успешные публикации и ошибки (API/Kafka).
+- Метрики Prometheus (`weather_requests_total`, `request_duration_seconds`, `errors_total`, `stations_processed_total`, `http_requests_total`, `http_request_duration_seconds`).
+- Все логи пишутся в stdout (structlog JSON) — удобно для ELK.
 
-Точный план слоёв и модулей описан в `ARCHITECTURE.md`. Основные различия по сравнению с Go-реализацией:
+## Запуск
 
-- **FastAPI** + **uvicorn** для HTTP.
-- **httpx.AsyncClient** для Open-Meteo.
-- **SQLAlchemy (asyncpg)** или `asyncpg` + шаблон репозитория для PostgreSQL.
-- **aiokafka** для публикаций.
-- **aioredis** для дедупликации/кэша.
-- **prometheus_client** и `FastAPI` middleware для метрик.
-- **Pydantic BaseSettings** для загрузки конфигурации.
-- **asyncio**-scheduler ожидает следующего полного часа и запускает сбор погодных данных по станции.
+1. `copy .env.example .env` и заполните `YANDEX_WEATHER_API_KEY`.
+2. `python -m pip install -r requirements.txt`.
+3. `docker compose up --build` (PostgreSQL, Kafka, Redis, сервис). Или запуск без Docker: `uvicorn app.main:app --host 0.0.0.0 --port ${PORT}`.
 
-Текущая директория `app/` должна разделяться на:
+## Проверка
 
-- `app/api` — FastAPI маршруты (health, metrics, stations CRUD).
-- `app/services` — бизнес-логика сбора/валидации/нормализации/публикации.
-- `app/clients` — Open-Meteo HTTP-клиент.
-- `app/repositories` — PostgreSQL-репозитории.
-- `app/config` — Pydantic настройки и helpers.
-- `app/models` / `app/schemas` — Pydantic модели и ORM‑строки.
-- `app/monitoring` — метрики/логирование.
-- `app/scheduler` — модуль, дожидающийся полного часа и запускающий сбор ошибок.
+- `python -m pytest` — unit-тесты (моки, без Kafka/PostgreSQL).
+- `docker compose run --rm -v "${PWD}:/app" actual-weather python -m pytest` — интеграционные тесты внутри контейнера.
 
-Дополнительно:
-- `scripts/` — entrypoint (`docker-entrypoint.sh`), setup-утилиты.
-- `migrations/` — SQL/Алембик-обновления с исходными таблицами.
-- `tests/` — unit/integration для каждого уровня.
+## Что упрощено
 
----
+- Удалён тревожный сохранение измерений в PostgreSQL, осталась только таблица `stations` для чтения.
+- Поток стал однопоточным в плане хранения — всё хранилище аналитики — Kafka.
 
-## Что должен сделать следующий агент
+## Следующие шаги
 
-1. **Создать структуру Python-пакетов** (`app/` со слоями выше, `tests/`, `configs/`, `scripts/`).
-2. **Описать конфигурацию** через `app/config/settings.py`, поддерживающую `POSTGRES_DSN`, `KAFKA_BROKERS`, `REDIS_URL`, `OPEN_METEO_API`, `PORT`, `LOG_LEVEL`, таймауты и retry-параметры.
-3. **Определить модели** `Station` и `WeatherMeasurement` (ORM + Pydantic).
-4. **Написать skeleton-репозитории** с методами для CRUD станций и сохранения измерений. Пока оставьте тела `NotImplementedError`, но опишите интерфейсы.
-5. **Добавить Open-Meteo клиент** с `httpx.AsyncClient`, retry (exponential backoff), базовой сериализацией.
-6. **Склеить scheduler**: `asyncio` задача, которая ждёт следующего полного часа, получает список активных станций и запускает `asyncio.create_task()` для каждой.
-7. **Определить отслеживаемые метрики** через `prometheus_client` и middleware.
-8. **Описать HTTP-ручки**: `GET /health`, `GET /metrics`, `GET/POST/PUT/DELETE /stations`.
-9. **Подготовить `Dockerfile` и `docker-compose.yml`** (ориентируясь на текущие файлы, но заменив Go-исполнение на Python) и добавить `scripts/docker-entrypoint.sh`.
-10. **Документировать API** (описать контракт `Station` и формат Kafka-сообщения) прямо в README и `ARCHITECTURE.md`.
-
----
-
-## Дорожная карта документации
-
-| Раздел | Состояние | Комментарий |
-| ------ | --------- | ----------- |
-| Архитектура Python (FastAPI + asyncio) | ✅ описана в ARCHITECTURE.md | Дополнить схемы, если появятся новые компоненты |
-| README и инструкции | ✅ обновлены | Добавить диаграммы после реализации |
-| Реализация | 🚧 **оставлено следующему агенту** | Важно: концентрироваться на async-конкурентности и чистом слоях |
-
----
-
-## Дополнительно
-
-- В `docker-compose.yml` оставить сервисы Postgres, Kafka, Redis как есть; Python-сервис может именоваться `actual-weather-python`.
-- `requirements.txt` пока содержит комментарий о том, что зависимости будут добавлены по мере реализации.
-- Все TODO/NotImplemented осталось в документации (не в коде), чтобы снизить объём начальной работы.
-- Вся логика должна соблюдаться согласно принципам **Clean Architecture**, **SOLID**, **Dependency Injection** и **context-aware async**.
-
-После создания структуры следующий агент должен вернуть сюда README краткое описание (что реализовано) и отметить `TASK.md` (новую версию) по мере выполнения этапов.
+1. Добавить фабрики/clients для тестового окружения Kafka/Redis (если нужно).
+2. Настроить observability (внешние алерты) на метрики `errors_total` и `weather_requests_total`.
