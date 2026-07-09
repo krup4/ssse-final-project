@@ -43,16 +43,17 @@ func (r *AnalyticsRepository) WorstErrors(ctx context.Context, filter domain.Ana
 		order = "absolute_error ASC"
 	}
 	query := `
-		SELECT id, station_id, station_name, region_name, metric, forecast_value, actual_value,
+		SELECT id, station_id, station_name, region_name, parameter, metric, forecast_value, actual_value,
 		       absolute_error, error_pct, observed_at
 		FROM worst_errors
 		WHERE observed_at >= ? AND observed_at <= ?
 		  AND (? = '' OR ? = 'all' OR region_id = ?)
 		  AND (? = '' OR ? = 'all' OR station_id = ?)
+		  AND (? = '' OR ? = 'all' OR parameter = ?)
 		  AND (? = '' OR ? = 'all' OR metric = ?)
 		ORDER BY ` + order + `
 		LIMIT ?`
-	rows, err := r.db.QueryContext(ctx, query, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, string(filter.Metric), string(filter.Metric), string(filter.Metric), limit)
+	rows, err := r.db.QueryContext(ctx, query, filter.DateFrom, filter.DateTo, filter.RegionID, filter.RegionID, filter.RegionID, filter.StationID, filter.StationID, filter.StationID, filter.Field, filter.Field, filter.Field, string(filter.Metric), string(filter.Metric), string(filter.Metric), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +63,7 @@ func (r *AnalyticsRepository) WorstErrors(ctx context.Context, filter domain.Ana
 	for rows.Next() {
 		var row domain.ForecastErrorRow
 		var metric string
-		if err := rows.Scan(&row.ID, &row.StationID, &row.StationName, &row.RegionName, &metric, &row.ForecastValue, &row.ActualValue, &row.AbsoluteError, &row.ErrorPct, &row.ObservedAt); err != nil {
+		if err := rows.Scan(&row.ID, &row.StationID, &row.StationName, &row.RegionName, &row.Parameter, &metric, &row.ForecastValue, &row.ActualValue, &row.AbsoluteError, &row.ErrorPct, &row.ObservedAt); err != nil {
 			return nil, err
 		}
 		row.Metric = domain.Metric(metric)

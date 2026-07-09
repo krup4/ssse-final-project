@@ -20,7 +20,7 @@ HEADERS = {
 BASIC_QUERY = """{{
   weatherByPoint(request: {{ lat: {}, lon: {} }}) {{
     forecast {{
-      days(limit: 5) {{
+      days(limit: 2) {{
         hours {{
           time
           temperature
@@ -53,7 +53,11 @@ async def get_forecast(lat: float, lon: float) -> Optional[dict]:
         return None
 
     try:
-        return data["data"]["weatherByPoint"]["forecast"]["days"][1]["hours"]
+        days = data["data"]["weatherByPoint"]["forecast"]["days"]
+        hours = []
+        for day in days:
+            hours.extend(day.get("hours", []))
+        return hours
     except (KeyError, IndexError) as e:
         logging.error(f"Fail attempt of extracting forecast data: {e}")
         return None

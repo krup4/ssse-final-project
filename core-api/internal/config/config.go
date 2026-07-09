@@ -76,6 +76,7 @@ type ClickHouseConfig struct {
 	ConnectBackoff  time.Duration
 	ConnectTimeout  time.Duration
 	PingTimeout     time.Duration
+	SyncInterval    time.Duration
 }
 
 func Load() Config {
@@ -139,6 +140,7 @@ func Load() Config {
 			ConnectBackoff:  durationEnv("CLICKHOUSE_CONNECT_BACKOFF", time.Second),
 			ConnectTimeout:  durationEnv("CLICKHOUSE_CONNECT_TIMEOUT", 2*time.Minute),
 			PingTimeout:     durationEnv("CLICKHOUSE_PING_TIMEOUT", 2*time.Second),
+			SyncInterval:    durationEnv("CLICKHOUSE_SYNC_INTERVAL", 5*time.Minute),
 		},
 	}
 }

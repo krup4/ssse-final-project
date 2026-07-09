@@ -32,8 +32,16 @@ def _on_retry(retry_state: RetryCallState) -> None:
 
 
 class YandexWeatherClient:
-    def __init__(self, base_url: str, api_key: str, timeout: float, rate_limit_rps: float = 1.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        graphql_url: str,
+        api_key: str,
+        timeout: float,
+        rate_limit_rps: float = 1.0,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._graphql_url = graphql_url.rstrip("/")
         if not api_key:
             raise ValueError("YANDEX_WEATHER_API_KEY is required for YandexWeatherClient")
         self._headers = {"X-Yandex-Weather-Key": api_key}
@@ -68,8 +76,64 @@ class YandexWeatherClient:
         return await _fetch()
 
     async def get_current_measurement(self, lat: float, lon: float) -> WeatherMeasurement:
-        data = await self.get_current_weather(lat, lon)
-        return parse_measurement(data)
+        try:
+            data = await self.get_current_weather(lat, lon)
+            return parse_measurement(data)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code != 403:
+                raise
+            logger.warning("yandex_weather_rest_forbidden_using_graphql_fallback")
+            return await self.get_current_measurement_graphql(lat, lon)
+
+    async def get_current_measurement_graphql(self, lat: float, lon: float) -> WeatherMeasurement:
+        query = """query CurrentWeather($lat: Float!, $lon: Float!) {
+  weatherByPoint(request: { lat: $lat, lon: $lon }) {
+    forecast {
+      days(limit: 1) {
+        hours {
+          time
+          temperature
+          humidity
+          pressure
+          windSpeed
+        }
+      }
+    }
+  }
+}"""
+
+        await self._rate_limiter.wait()
+        WEATHER_REQUESTS_TOTAL.inc()
+        start = time.perf_counter()
+        try:
+            response = await self._client.post(
+                self._graphql_url,
+                json={"query": query, "variables": {"lat": lat, "lon": lon}},
+            )
+            response.raise_for_status()
+            payload = response.json()
+        finally:
+            REQUEST_DURATION_SECONDS.observe(time.perf_counter() - start)
+
+        if payload.get("errors"):
+            raise RuntimeError(f"Yandex Weather GraphQL errors: {payload['errors']}")
+
+        hours = payload["data"]["weatherByPoint"]["forecast"]["days"][0]["hours"]
+        now = datetime.now(timezone.utc)
+        parsed = []
+        for hour in hours:
+            ts = datetime.fromisoformat(hour["time"]).astimezone(timezone.utc)
+            parsed.append((ts, hour))
+        past = [(ts, hour) for ts, hour in parsed if ts <= now]
+        ts, hour = max(past or parsed, key=lambda item: item[0])
+        return WeatherMeasurement(
+            timestamp=ts,
+            temperature=hour.get("temperature"),
+            humidity=hour.get("humidity"),
+            pressure=hour.get("pressure"),
+            wind_speed=hour.get("windSpeed"),
+            created_at=now,
+        )
 
 
 def parse_measurement(data: YandexWeatherResponse) -> WeatherMeasurement:

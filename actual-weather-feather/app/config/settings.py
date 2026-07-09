@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     kafka_ssl_skip_verify: bool = False
 
     yandex_weather_url: str = "https://api.weather.yandex.ru/v2/informers"
+    yandex_weather_graphql_url: str = "https://api.weather.yandex.ru/graphql/query"
     yandex_weather_api_key: str = ""
     yandex_weather_rate_limit_rps: float = 1.0
     request_timeout: float = 10.0

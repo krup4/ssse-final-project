@@ -25,7 +25,14 @@ class StationRepository:
     async def get_active(self) -> list[StationRead]:
         """Get all active stations."""
         query = """
-                SELECT id, name, latitude, longitude, region, active, created_at, updated_at
+                SELECT id,
+                       name,
+                       COALESCE(latitude, lat) AS latitude,
+                       COALESCE(longitude, lon) AS longitude,
+                       region,
+                       COALESCE(is_active, active, true) AS active,
+                       created_at,
+                       updated_at
                 FROM stations
             """
         if self._name_filter:
@@ -34,7 +41,7 @@ class StationRepository:
             async with self._pool.acquire() as conn:
                 rows = await conn.fetch(query, self._name_filter)
         else:
-            query += " WHERE active = true"
+            query += " WHERE COALESCE(is_active, active, true) = true"
             query += " ORDER BY id"
             async with self._pool.acquire() as conn:
                 rows = await conn.fetch(query)
@@ -45,7 +52,14 @@ class StationRepository:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, name, latitude, longitude, region, active, created_at, updated_at
+                SELECT id,
+                       name,
+                       COALESCE(latitude, lat) AS latitude,
+                       COALESCE(longitude, lon) AS longitude,
+                       region,
+                       COALESCE(is_active, active, true) AS active,
+                       created_at,
+                       updated_at
                 FROM stations
                 ORDER BY id
                 """
@@ -57,7 +71,14 @@ class StationRepository:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT id, name, latitude, longitude, region, active, created_at, updated_at
+                SELECT id,
+                       name,
+                       COALESCE(latitude, lat) AS latitude,
+                       COALESCE(longitude, lon) AS longitude,
+                       region,
+                       COALESCE(is_active, active, true) AS active,
+                       created_at,
+                       updated_at
                 FROM stations
                 WHERE id = $1
                 """,
@@ -72,9 +93,16 @@ class StationRepository:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO stations (name, latitude, longitude, region, active)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING id, name, latitude, longitude, region, active, created_at, updated_at
+                INSERT INTO stations (name, lat, lon, latitude, longitude, region, is_active, active)
+                VALUES ($1, $2, $3, $2, $3, $4, $5, $5)
+                RETURNING id,
+                          name,
+                          COALESCE(latitude, lat) AS latitude,
+                          COALESCE(longitude, lon) AS longitude,
+                          region,
+                          COALESCE(is_active, active, true) AS active,
+                          created_at,
+                          updated_at
                 """,
                 station.name,
                 station.latitude,
@@ -101,11 +129,24 @@ class StationRepository:
             row = await conn.fetchrow(
                 """
                 UPDATE stations
-                SET name = $1, latitude = $2, longitude = $3, region = $4,
-                    active = $5, updated_at = CURRENT_TIMESTAMP
+                SET name = $1,
+                    lat = $2,
+                    lon = $3,
+                    latitude = $2,
+                    longitude = $3,
+                    region = $4,
+                    is_active = $5,
+                    active = $5,
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE id = $6
-                RETURNING id, name, latitude, longitude, region, active,
-                          created_at, updated_at
+                RETURNING id,
+                          name,
+                          COALESCE(latitude, lat) AS latitude,
+                          COALESCE(longitude, lon) AS longitude,
+                          region,
+                          COALESCE(is_active, active, true) AS active,
+                          created_at,
+                          updated_at
                 """,
                 name,
                 latitude,
@@ -135,4 +176,3 @@ class StationRepository:
         """Count total stations."""
         async with self._pool.acquire() as conn:
             return await conn.fetchval("SELECT COUNT(*) FROM stations")
-

@@ -1,6 +1,7 @@
 """Scheduler that collects weather exactly on hourly multiples."""
 
 import asyncio
+import math
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -49,7 +50,7 @@ class WeatherScheduler:
         remainder = now.hour % self._interval_hours
         next_hours = self._interval_hours - remainder if remainder != 0 else self._interval_hours
         target = base + timedelta(hours=next_hours)
-        return max(1, int((target - now).total_seconds()))
+        return max(1, math.ceil((target - now).total_seconds()))
 
     async def start(self) -> None:
         self._running = True
@@ -110,15 +111,20 @@ class WeatherScheduler:
         return True
 
     async def _collect_all(self) -> None:
+        release_lock = self._lock_enabled and self.redis_client is not None
         try:
             stations = await self.station_repo.get_active()
         except Exception as exc:
             logger.error("load_stations_failed", error=str(exc), exc_info=True)
             ERRORS_TOTAL.inc()
+            if release_lock:
+                await self.redis_client.release_lock(self._lock_key, self._lock_value)
             return
 
         if not stations:
             logger.warning("no_active_stations")
+            if release_lock:
+                await self.redis_client.release_lock(self._lock_key, self._lock_value)
             return
 
         logger.info("collecting_weather", station_count=len(stations))
@@ -140,3 +146,5 @@ class WeatherScheduler:
             return_exceptions=True,
         )
         logger.info("weather_collection_completed", station_count=len(stations))
+        if release_lock:
+            await self.redis_client.release_lock(self._lock_key, self._lock_value)

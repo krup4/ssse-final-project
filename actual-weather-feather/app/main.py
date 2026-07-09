@@ -43,6 +43,7 @@ async def lifespan(app: FastAPI):
 
         weather_client = YandexWeatherClient(
             settings.yandex_weather_url,
+            settings.yandex_weather_graphql_url,
             settings.yandex_weather_api_key,
             settings.request_timeout,
             settings.yandex_weather_rate_limit_rps,

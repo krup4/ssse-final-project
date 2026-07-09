@@ -20,6 +20,8 @@ import (
 	"weather-accuracy/core-api/internal/platform/logger"
 	"weather-accuracy/core-api/internal/platform/metrics"
 	"weather-accuracy/core-api/internal/service"
+
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -82,6 +84,14 @@ func main() {
 			}
 		}()
 		clickHouseAnalytics = clickhouse.NewAnalyticsRepository(chDB)
+		if err := clickHouseAnalytics.Migrate(context.Background()); err != nil {
+			log.Error("clickhouse migration failed", slog.Any("error", err))
+			os.Exit(1)
+		}
+		if err := clickHouseAnalytics.SyncFromPostgres(context.Background(), db); err != nil {
+			log.Error("clickhouse initial sync failed", slog.Any("error", err))
+			os.Exit(1)
+		}
 		analyticsRepo = clickHouseAnalytics
 		readiness = func(ctx context.Context) error {
 			if err := repos.Ping(ctx); err != nil {
@@ -163,6 +173,10 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if clickHouseAnalytics != nil && cfg.ClickHouse.SyncInterval > 0 {
+		go runClickHouseSync(ctx, clickHouseAnalytics, db, cfg.ClickHouse.SyncInterval, log)
+	}
+
 	if cfg.Kafka.Enabled {
 		consumer := kafka.NewActualWeatherConsumer(kafka.ConsumerConfig{
 			Brokers:        cfg.Kafka.Brokers,
@@ -199,5 +213,20 @@ func main() {
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Error("http shutdown failed", slog.Any("error", err))
+	}
+}
+
+func runClickHouseSync(ctx context.Context, analytics *clickhouse.AnalyticsRepository, db *gorm.DB, interval time.Duration, log *slog.Logger) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := analytics.SyncFromPostgres(ctx, db); err != nil {
+				log.Warn("clickhouse sync failed", slog.Any("error", err))
+			}
+		}
 	}
 }

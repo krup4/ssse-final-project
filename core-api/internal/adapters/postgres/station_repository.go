@@ -2,9 +2,9 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"strconv"
 	"strings"
-	"time"
 
 	"gorm.io/gorm"
 
@@ -87,14 +87,15 @@ func (r *StationRepository) toDomainStation(ctx context.Context, model StationMo
 		Status:        status,
 		ActiveSensors: activeSensors,
 	}
-	var lastArchive time.Time
+	var lastArchive sql.NullTime
 	_ = r.db.WithContext(ctx).Model(&ArchiveModel{}).Where("station_id = ?", model.ID).Select("max(dt)").Scan(&lastArchive).Error
-	var lastForecast time.Time
+	var lastForecast sql.NullTime
 	_ = r.db.WithContext(ctx).Model(&ForecastModel{}).Where("station_id = ?", model.ID).Select("max(date)").Scan(&lastForecast).Error
-	if lastArchive.After(lastForecast) {
-		station.LastTelemetryAt = lastArchive
-	} else {
-		station.LastTelemetryAt = lastForecast
+	if lastArchive.Valid {
+		station.LastTelemetryAt = lastArchive.Time
+	}
+	if lastForecast.Valid && lastForecast.Time.After(station.LastTelemetryAt) {
+		station.LastTelemetryAt = lastForecast.Time
 	}
 	var values []stationErrorValue
 	_ = r.db.WithContext(ctx).Raw(`
