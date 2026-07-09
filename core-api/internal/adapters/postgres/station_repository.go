@@ -12,8 +12,7 @@ import (
 )
 
 type stationErrorValue struct {
-	ForecastValue float64
-	ActualValue   float64
+	MetricValue float64
 }
 
 func (r *StationRepository) List(ctx context.Context, _ string, status domain.StationStatus) ([]domain.Station, error) {
@@ -99,16 +98,15 @@ func (r *StationRepository) toDomainStation(ctx context.Context, model StationMo
 	}
 	var values []stationErrorValue
 	_ = r.db.WithContext(ctx).Raw(`
-		select f.value as forecast_value, a.value as actual_value
+		select a.value as metric_value
 		from forecasts f
 		join forecast_fields ff on ff.id = f.field_id
 		join metrics m on m.forecast_field_id = ff.id
 		join archive a on a.station_id = f.station_id and a.metric_id = m.id and a.dt = f.date
 		where f.station_id = ?`, model.ID).Scan(&values).Error
 	for _, value := range values {
-		absoluteError, _ := calculateError(value.ForecastValue, value.ActualValue)
-		if absoluteError > station.MaxError {
-			station.MaxError = absoluteError
+		if value.MetricValue > station.MaxError {
+			station.MaxError = value.MetricValue
 		}
 	}
 	return station

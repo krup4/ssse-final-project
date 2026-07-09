@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncpg
 import os
 from forecast_fetcher import get_forecast
@@ -31,7 +31,7 @@ async def update_and_dump_forecast_data():
                 continue
 
             for vals in forecast:
-                dt = datetime.fromisoformat(vals['time']).replace(tzinfo=None)
+                dt = datetime.fromisoformat(vals['time']).astimezone(timezone.utc)
                 temp = vals["temperature"]
                 humidity = vals["humidity"]
                 press = vals["pressure"]

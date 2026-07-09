@@ -25,7 +25,7 @@ type syncSourceRow struct {
 	Parameter     string
 	Metric        string
 	ForecastValue float64
-	ActualValue   float64
+	MetricValue   float64
 	ObservedAt    time.Time
 }
 
@@ -90,7 +90,7 @@ func (r *AnalyticsRepository) SyncFromPostgres(ctx context.Context, source *gorm
 		       ff.name as parameter,
 		       m.name as metric,
 		       f.value as forecast_value,
-		       a.value as actual_value,
+		       a.value as metric_value,
 		       a.dt as observed_at
 		from forecasts f
 		join stations s on s.id = f.station_id and s.is_active = true
@@ -131,40 +131,41 @@ func (r *AnalyticsRepository) truncateAnalyticsTables(ctx context.Context) error
 func (r *AnalyticsRepository) insertAnalyticsRows(ctx context.Context, rows []syncSourceRow, activeStations uint32, offlineStations uint32) error {
 	totalAbs := 0.0
 	for _, row := range rows {
-		totalAbs += absoluteError(row.ForecastValue, row.ActualValue)
+		totalAbs += row.MetricValue
 	}
 
 	daily := map[dailyKey]*dailyAccumulator{}
 	for _, row := range rows {
-		abs := absoluteError(row.ForecastValue, row.ActualValue)
-		errPct := errorPercent(row.ForecastValue, row.ActualValue)
+		metricValue := row.MetricValue
+		displayActual := displayActualValue(row.ForecastValue, row.Metric, metricValue)
+		errPct := metricPercent(row.ForecastValue, metricValue)
 		contribution := 0.0
 		if totalAbs > 0 {
-			contribution = abs / totalAbs * 100
+			contribution = metricValue / totalAbs * 100
 		}
 		id := stableID(row.ID, row.Parameter, row.Metric, row.ObservedAt)
 		if _, err := r.db.ExecContext(ctx, `INSERT INTO worst_errors
 			(id, station_id, station_name, region_id, region_name, parameter, metric, forecast_value, actual_value, absolute_error, error_pct, observed_at, backfill_version)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			id, row.StationID, row.StationName, row.RegionID, row.RegionName, row.Parameter, row.Metric, row.ForecastValue, row.ActualValue, abs, errPct, row.ObservedAt.UTC(), "calc-v1"); err != nil {
+			id, row.StationID, row.StationName, row.RegionID, row.RegionName, row.Parameter, row.Metric, row.ForecastValue, displayActual, metricValue, errPct, row.ObservedAt.UTC(), "calc-v1"); err != nil {
 			return fmt.Errorf("insert worst_errors: %w", err)
 		}
 		if _, err := r.db.ExecContext(ctx, `INSERT INTO parameter_errors
-			(id, parameter, station_id, station_name, region_id, region_name, forecast_value, actual_value, absolute_error, error_pct, contribution_pct, samples, observed_at, backfill_version)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			id, row.Parameter, row.StationID, row.StationName, row.RegionID, row.RegionName, row.ForecastValue, row.ActualValue, abs, errPct, contribution, uint64(1), row.ObservedAt.UTC(), "calc-v1"); err != nil {
+			(id, parameter, metric, station_id, station_name, region_id, region_name, forecast_value, actual_value, absolute_error, error_pct, contribution_pct, samples, observed_at, backfill_version)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, row.Parameter, row.Metric, row.StationID, row.StationName, row.RegionID, row.RegionName, row.ForecastValue, displayActual, metricValue, errPct, contribution, uint64(1), row.ObservedAt.UTC(), "calc-v1"); err != nil {
 			return fmt.Errorf("insert parameter_errors: %w", err)
 		}
 		if _, err := r.db.ExecContext(ctx, `INSERT INTO parameter_error_trend
-			(timestamp, parameter, region_id, station_id, absolute_error, mae, samples, backfill_version)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			row.ObservedAt.UTC(), row.Parameter, row.RegionID, row.StationID, abs, abs, uint64(1), "calc-v1"); err != nil {
+			(timestamp, parameter, metric, region_id, station_id, absolute_error, mae, samples, backfill_version)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			row.ObservedAt.UTC(), row.Parameter, row.Metric, row.RegionID, row.StationID, metricValue, metricValue, uint64(1), "calc-v1"); err != nil {
 			return fmt.Errorf("insert parameter_error_trend: %w", err)
 		}
 		if _, err := r.db.ExecContext(ctx, `INSERT INTO station_series
 			(timestamp, station_id, metric, forecast, actual, absolute_error, backfill_version)
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			row.ObservedAt.UTC(), row.StationID, row.Metric, row.ForecastValue, row.ActualValue, abs, "calc-v1"); err != nil {
+			row.ObservedAt.UTC(), row.StationID, row.Metric, row.ForecastValue, displayActual, metricValue, "calc-v1"); err != nil {
 			return fmt.Errorf("insert station_series: %w", err)
 		}
 
@@ -175,7 +176,7 @@ func (r *AnalyticsRepository) insertAnalyticsRows(ctx context.Context, rows []sy
 			acc = &dailyAccumulator{}
 			daily[key] = acc
 		}
-		acc.add(abs)
+		acc.add(metricValue)
 	}
 
 	keys := make([]dailyKey, 0, len(daily))
@@ -206,15 +207,18 @@ func tryAdvisoryLock(ctx context.Context, db *gorm.DB) (bool, error) {
 	return locked, err
 }
 
-func absoluteError(forecast, actual float64) float64 {
-	return math.Abs(forecast - actual)
-}
-
-func errorPercent(forecast, actual float64) float64 {
+func metricPercent(forecast, metricValue float64) float64 {
 	if math.Abs(forecast) < 0.000001 {
 		return 0
 	}
-	return math.Abs((actual - forecast) / forecast * 100)
+	return math.Abs(metricValue / forecast * 100)
+}
+
+func displayActualValue(forecast float64, metric string, metricValue float64) float64 {
+	if metric == "mse" {
+		return forecast - math.Sqrt(math.Abs(metricValue))
+	}
+	return forecast - metricValue
 }
 
 func stableID(parts ...any) string {

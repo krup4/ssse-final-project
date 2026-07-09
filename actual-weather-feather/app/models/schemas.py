@@ -55,12 +55,17 @@ class WeatherMeasurement(BaseModel):
 
 class WeatherKafkaMessage(BaseModel):
     """Kafka message for weather data."""
-    station_id: int
-    timestamp: datetime
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    station_id: int = Field(..., alias="stationId")
+    observed_at: datetime = Field(..., alias="observedAt")
     temperature: float | None = None
     humidity: float | None = None
     pressure: float | None = None
-    wind_speed: float | None = None
+    wind_speed: float | None = Field(None, alias="windSpeed")
+    source: str = "yandex-weather"
+    trace_id: str | None = Field(None, alias="traceId")
 
 
 class HealthResponse(BaseModel):
@@ -94,4 +99,3 @@ class YandexWeatherFact(BaseModel):
 class YandexWeatherResponse(BaseModel):
     """Yandex Weather API response."""
     fact: YandexWeatherFact | None = None
-

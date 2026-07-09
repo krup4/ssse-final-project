@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS parameter_errors
 (
     id String,
     parameter LowCardinality(String),
+    metric LowCardinality(String),
     station_id String,
     station_name String,
     region_id String,
@@ -36,12 +37,13 @@ CREATE TABLE IF NOT EXISTS parameter_errors
 )
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(observed_at)
-ORDER BY (observed_at, region_id, station_id, parameter, absolute_error);
+ORDER BY (observed_at, region_id, station_id, parameter, metric, absolute_error);
 
 CREATE TABLE IF NOT EXISTS parameter_error_trend
 (
     timestamp DateTime64(3, 'UTC'),
     parameter LowCardinality(String),
+    metric LowCardinality(String),
     region_id String,
     station_id String,
     absolute_error Float64,
@@ -51,7 +53,7 @@ CREATE TABLE IF NOT EXISTS parameter_error_trend
 )
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (timestamp, region_id, station_id, parameter);
+ORDER BY (timestamp, region_id, station_id, parameter, metric);
 
 CREATE TABLE IF NOT EXISTS station_series
 (

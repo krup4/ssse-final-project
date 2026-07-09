@@ -22,5 +22,11 @@ func (r *AnalyticsRepository) Migrate(ctx context.Context) error {
 	if _, err := r.db.ExecContext(ctx, "ALTER TABLE worst_errors ADD COLUMN IF NOT EXISTS parameter LowCardinality(String) AFTER region_name"); err != nil {
 		return err
 	}
+	if _, err := r.db.ExecContext(ctx, "ALTER TABLE parameter_errors ADD COLUMN IF NOT EXISTS metric LowCardinality(String) AFTER parameter"); err != nil {
+		return err
+	}
+	if _, err := r.db.ExecContext(ctx, "ALTER TABLE parameter_error_trend ADD COLUMN IF NOT EXISTS metric LowCardinality(String) AFTER parameter"); err != nil {
+		return err
+	}
 	return nil
 }

@@ -7,7 +7,11 @@ Frontend for a weather forecast accuracy analytics system.
 ```bash
 cd frontend
 npm install
-export VITE_YANDEX_MAPS_API_KEY=your-yandex-maps-api-key
+cat > public/config.js <<'EOF'
+window.__APP_CONFIG__ = {
+  yandexMapsApiKey: "your-yandex-maps-api-key"
+};
+EOF
 npm run dev
 ```
 
@@ -32,7 +36,7 @@ cp .env.example .env
 Then set:
 
 ```dotenv
-VITE_YANDEX_MAPS_API_KEY=your-yandex-maps-api-key
+YANDEX_MAPS_API_KEY=your-yandex-maps-api-key
 ```
 
 Build and run:
@@ -47,6 +51,7 @@ are proxied to `core-api`.
 Optional local-only demo data and Kafka telemetry scripts are documented in
 `dev/README.md`. Do not run those scripts for production deploys.
 
-The station map uses Yandex Maps JavaScript API. Because this is a Vite static
-frontend, `VITE_*` values are embedded during Docker image build. Rebuild the
-image after changing `.env`.
+The station map uses Yandex Maps JavaScript API. The production image writes
+`/config.js` at container startup from `YANDEX_MAPS_API_KEY`, so the same image
+can be reused across environments. In Kubernetes, provide this value through
+`frontend-secret`.

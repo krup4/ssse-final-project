@@ -88,10 +88,6 @@ func main() {
 			log.Error("clickhouse migration failed", slog.Any("error", err))
 			os.Exit(1)
 		}
-		if err := clickHouseAnalytics.SyncFromPostgres(context.Background(), db); err != nil {
-			log.Error("clickhouse initial sync failed", slog.Any("error", err))
-			os.Exit(1)
-		}
 		analyticsRepo = clickHouseAnalytics
 		readiness = func(ctx context.Context) error {
 			if err := repos.Ping(ctx); err != nil {
@@ -219,14 +215,18 @@ func main() {
 func runClickHouseSync(ctx context.Context, analytics *clickhouse.AnalyticsRepository, db *gorm.DB, interval time.Duration, log *slog.Logger) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	sync := func() {
+		if err := analytics.SyncFromPostgres(ctx, db); err != nil {
+			log.Warn("clickhouse sync failed", slog.Any("error", err))
+		}
+	}
+	sync()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := analytics.SyncFromPostgres(ctx, db); err != nil {
-				log.Warn("clickhouse sync failed", slog.Any("error", err))
-			}
+			sync()
 		}
 	}
 }

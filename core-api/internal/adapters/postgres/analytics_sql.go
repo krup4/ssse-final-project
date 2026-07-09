@@ -49,6 +49,7 @@ func baseParameterActualSQL(parameter string, currentOnly bool) string {
 		       '' as region_name,
 		       f.value as forecast_value,
 		       a.value as actual_value,
+		       m.name as metric,
 		       a.dt as observed_at
 		from forecasts f
 		join stations s on s.id = f.station_id and s.is_active = true

@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     redis_ttl_seconds: int = 3600
 
     kafka_brokers: str = "kafka:9092"
-    kafka_topic: str = "weather.actual"
+    kafka_topic: str = "actual-weather.raw.v1"
     kafka_timeout_ms: int = 10000
     kafka_security_protocol: str = "PLAINTEXT"
     kafka_sasl_mechanism: str = "SCRAM-SHA-512"
