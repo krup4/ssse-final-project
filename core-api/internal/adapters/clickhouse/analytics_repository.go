@@ -80,7 +80,7 @@ func (r *AnalyticsRepository) ParameterErrors(ctx context.Context, filter domain
 		WHERE observed_at >= ? AND observed_at <= ?
 		  AND (? = '' OR ? = 'all' OR region_id = ?)
 		  AND (? = '' OR ? = 'all' OR station_id = ?)
-		  AND (? = '' OR ? = 'all' OR parameter = ?)
+		  AND (? = '' OR ? = 'all' OR metric = ?)
 		  AND (? = '' OR ? = 'all' OR parameter = ?)
 		ORDER BY absolute_error DESC
 		LIMIT 500`
@@ -111,7 +111,7 @@ func (r *AnalyticsRepository) ParameterTrend(ctx context.Context, filter domain.
 		WHERE timestamp >= ? AND timestamp <= ?
 		  AND (? = '' OR ? = 'all' OR region_id = ?)
 		  AND (? = '' OR ? = 'all' OR station_id = ?)
-		  AND (? = '' OR ? = 'all' OR parameter = ?)
+		  AND (? = '' OR ? = 'all' OR metric = ?)
 		  AND (? = '' OR ? = 'all' OR parameter = ?)
 		GROUP BY bucket_ts, parameter
 		ORDER BY bucket_ts, parameter`, bucket)

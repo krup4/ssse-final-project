@@ -63,7 +63,7 @@ class WeatherService:
 
         kafka_message = WeatherKafkaMessage(
             station_id=station.id,
-            timestamp=measurement.timestamp,
+            observed_at=measurement.timestamp,
             temperature=measurement.temperature,
             humidity=measurement.humidity,
             pressure=measurement.pressure,

@@ -8,7 +8,7 @@ import type { Station, StationInput } from "../entities/types";
 import { StationStatusBadge } from "../shared/ui/StatusBadge";
 import { useAuth } from "../features/auth/AuthContext";
 
-const yandexMapsApiKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY;
+const yandexMapsApiKey = window.__APP_CONFIG__?.yandexMapsApiKey ?? "";
 let yandexMapsPromise: Promise<YMapsApi> | null = null;
 
 function severityColor(error: number) {
@@ -41,7 +41,7 @@ function loadYandexMaps() {
   }
 
   if (!yandexMapsApiKey) {
-    return Promise.reject(new Error("VITE_YANDEX_MAPS_API_KEY is not configured"));
+    return Promise.reject(new Error("YANDEX_MAPS_API_KEY is not configured"));
   }
 
   if (!yandexMapsPromise) {
@@ -243,7 +243,7 @@ export function MapPage() {
         ) : (
           <div className="map-config-empty">
             <strong>Yandex Maps API key is not configured</strong>
-            <span>Set VITE_YANDEX_MAPS_API_KEY in frontend environment to render the station map.</span>
+            <span>Set YANDEX_MAPS_API_KEY in frontend environment to render the station map.</span>
           </div>
         )}
       </Panel>

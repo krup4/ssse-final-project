@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -168,16 +170,21 @@ func NewJSONActualWeatherDecoder() JSONActualWeatherDecoder {
 }
 
 type jsonActualWeatherPayload struct {
-	ID          string    `json:"id"`
-	StationID   string    `json:"stationId"`
-	ObservedAt  time.Time `json:"observedAt"`
-	Temperature *float64  `json:"temperature"`
-	WindSpeed   *float64  `json:"windSpeed"`
-	WindGust    *float64  `json:"windGust"`
-	Humidity    *float64  `json:"humidity"`
-	Pressure    *float64  `json:"pressure"`
-	Source      string    `json:"source"`
-	TraceID     string    `json:"traceId"`
+	ID              string         `json:"id"`
+	StationID       flexibleString `json:"stationId"`
+	LegacyStationID flexibleString `json:"station_id"`
+	ObservedAt      *time.Time     `json:"observedAt"`
+	LegacyTimestamp *time.Time     `json:"timestamp"`
+	Temperature     *float64       `json:"temperature"`
+	WindSpeed       *float64       `json:"windSpeed"`
+	LegacyWindSpeed *float64       `json:"wind_speed"`
+	WindGust        *float64       `json:"windGust"`
+	LegacyWindGust  *float64       `json:"wind_gust"`
+	Humidity        *float64       `json:"humidity"`
+	Pressure        *float64       `json:"pressure"`
+	Source          string         `json:"source"`
+	TraceID         string         `json:"traceId"`
+	LegacyTraceID   string         `json:"trace_id"`
 }
 
 func (d JSONActualWeatherDecoder) Decode(message kafka.Message) (domain.ActualWeatherReading, error) {
@@ -185,7 +192,24 @@ func (d JSONActualWeatherDecoder) Decode(message kafka.Message) (domain.ActualWe
 	if err := json.Unmarshal(message.Value, &payload); err != nil {
 		return domain.ActualWeatherReading{}, err
 	}
-	if payload.StationID == "" || payload.ObservedAt.IsZero() {
+	stationID := string(payload.StationID)
+	if stationID == "" {
+		stationID = string(payload.LegacyStationID)
+	}
+	observedAt := payload.ObservedAt
+	if observedAt == nil {
+		observedAt = payload.LegacyTimestamp
+	}
+	if payload.WindSpeed == nil {
+		payload.WindSpeed = payload.LegacyWindSpeed
+	}
+	if payload.WindGust == nil {
+		payload.WindGust = payload.LegacyWindGust
+	}
+	if payload.TraceID == "" {
+		payload.TraceID = payload.LegacyTraceID
+	}
+	if stationID == "" || observedAt == nil || observedAt.IsZero() {
 		return domain.ActualWeatherReading{}, errors.New("stationId and observedAt are required")
 	}
 	if payload.ID == "" {
@@ -207,13 +231,38 @@ func (d JSONActualWeatherDecoder) Decode(message kafka.Message) (domain.ActualWe
 	add(domain.ParameterPressure, payload.Pressure)
 	return domain.ActualWeatherReading{
 		ID:         payload.ID,
-		StationID:  payload.StationID,
-		ObservedAt: payload.ObservedAt.UTC(),
+		StationID:  stationID,
+		ObservedAt: observedAt.UTC(),
 		Values:     values,
 		Source:     payload.Source,
 		TraceID:    payload.TraceID,
 		RawPayload: message.Value,
 	}, nil
+}
+
+type flexibleString string
+
+func (s *flexibleString) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*s = ""
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(data, &text); err == nil {
+		*s = flexibleString(text)
+		return nil
+	}
+	var number json.Number
+	if err := json.Unmarshal(data, &number); err == nil {
+		*s = flexibleString(number.String())
+		return nil
+	}
+	var value float64
+	if err := json.Unmarshal(data, &value); err == nil {
+		*s = flexibleString(strconv.FormatFloat(value, 'f', -1, 64))
+		return nil
+	}
+	return fmt.Errorf("expected string or number, got %s", string(data))
 }
 
 func retry(ctx context.Context, attempts int, delay time.Duration, fn func() error) error {

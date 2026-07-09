@@ -29,7 +29,7 @@ class KafkaPublisher:
 
     async def publish(self, message: WeatherKafkaMessage) -> None:
         """Publish weather message to Kafka."""
-        payload = message.model_dump(mode="json")
+        payload = message.model_dump(mode="json", by_alias=True, exclude_none=True)
         try:
             await self._producer.send_and_wait(
                 self._topic,

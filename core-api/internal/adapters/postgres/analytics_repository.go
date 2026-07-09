@@ -44,6 +44,7 @@ type parameterActualRow struct {
 	RegionName    string
 	ForecastValue float64
 	ActualValue   float64
+	Metric        string
 	ObservedAt    time.Time
 }
 
@@ -51,6 +52,16 @@ type errorAccumulator struct {
 	sumAbs    float64
 	sumSquare float64
 	samples   int
+}
+
+var analyticsLocation = loadAnalyticsLocation()
+
+func loadAnalyticsLocation() *time.Location {
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return time.FixedZone("MSK", 3*60*60)
+	}
+	return location
 }
 
 func (a *errorAccumulator) add(absoluteError float64) {
@@ -101,7 +112,7 @@ func (r *AnalyticsRepository) Overview(ctx context.Context, filter domain.Analyt
 
 	byDate := map[string]*errorAccumulator{}
 	for _, row := range trendRows {
-		date := row.ObservedAt.Format("2006-01-02")
+		date := localDayStart(row.ObservedAt).Format(time.RFC3339)
 		acc := byDate[date]
 		if acc == nil {
 			acc = &errorAccumulator{}
@@ -124,6 +135,11 @@ func (r *AnalyticsRepository) Overview(ctx context.Context, filter domain.Analyt
 		})
 	}
 	return overview, nil
+}
+
+func localDayStart(value time.Time) time.Time {
+	local := value.In(analyticsLocation)
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, analyticsLocation)
 }
 
 func (r *AnalyticsRepository) WorstErrors(ctx context.Context, filter domain.AnalyticsFilter, limit int, sortOrder string) ([]domain.ForecastErrorRow, error) {
@@ -340,7 +356,7 @@ func (r *AnalyticsRepository) forecastErrorRows(ctx context.Context, filter doma
 			Parameter:     row.Parameter,
 			Metric:        domain.Metric(row.Metric),
 			ForecastValue: row.ForecastValue,
-			ActualValue:   row.ActualValue,
+			ActualValue:   displayActualValue(row.ForecastValue, row.Metric, metricValue),
 			AbsoluteError: metricValue,
 			ErrorPct:      metricPercent(row.ForecastValue, metricValue),
 			ObservedAt:    row.ObservedAt,
@@ -387,7 +403,7 @@ func (r *AnalyticsRepository) parameterErrorRows(ctx context.Context, filter dom
 			StationName:   row.StationName,
 			RegionName:    row.RegionName,
 			ForecastValue: row.ForecastValue,
-			ActualValue:   row.ActualValue,
+			ActualValue:   displayActualValue(row.ForecastValue, row.Metric, metricValue),
 			AbsoluteError: metricValue,
 			ErrorPct:      metricPercent(row.ForecastValue, metricValue),
 			ObservedAt:    row.ObservedAt,
@@ -450,6 +466,13 @@ func metricPercent(forecastValue, metricValue float64) float64 {
 		return 0
 	}
 	return math.Abs(metricValue / forecastValue * 100)
+}
+
+func displayActualValue(forecastValue float64, metric string, metricValue float64) float64 {
+	if metric == string(domain.MetricMSE) {
+		return forecastValue - math.Sqrt(math.Abs(metricValue))
+	}
+	return forecastValue - metricValue
 }
 
 func sortForecastErrors(rows []domain.ForecastErrorRow, sortOrder string) {

@@ -6,7 +6,7 @@ import structlog
 from tenacity import (
     RetryCallState,
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_delay,
     wait_exponential,
 )
@@ -29,6 +29,12 @@ def _on_retry(retry_state: RetryCallState) -> None:
         attempt=retry_state.attempt_number,
         error=str(retry_state.outcome.exception()) if retry_state.outcome else None,
     )
+
+
+def _is_retryable_weather_error(exc: BaseException) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 403:
+        return False
+    return isinstance(exc, httpx.HTTPError)
 
 
 class YandexWeatherClient:
@@ -56,7 +62,7 @@ class YandexWeatherClient:
         url = f"{self._base_url}?lat={lat}&lon={lon}&lang=ru_RU"
 
         @retry(
-            retry=retry_if_exception_type((httpx.HTTPError, httpx.HTTPStatusError)),
+            retry=retry_if_exception(_is_retryable_weather_error),
             wait=wait_exponential(multiplier=1, min=1, max=8),
             stop=stop_after_delay(15),
             before_sleep=_on_retry,

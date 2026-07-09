@@ -59,8 +59,28 @@ async def test_collect_for_station_saves_and_publishes():
 
     assert len(publisher.published) == 1
     assert redis.stored is not None
-    assert len(publisher.published) == 1
-    assert redis.stored is not None
+    message = publisher.published[0]
+    assert message.station_id == station.id
+    assert message.observed_at == client._measurement.timestamp
+
+
+def test_weather_kafka_message_uses_core_api_json_contract():
+    message = WeatherKafkaMessage(
+        station_id=7,
+        observed_at=datetime(2026, 6, 1, 15, 0, tzinfo=UTC),
+        temperature=18.6,
+        wind_speed=4.2,
+    )
+
+    payload = message.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+    assert payload == {
+        "stationId": 7,
+        "observedAt": "2026-06-01T15:00:00Z",
+        "temperature": 18.6,
+        "windSpeed": 4.2,
+        "source": "yandex-weather",
+    }
 
 
 @pytest.mark.asyncio
