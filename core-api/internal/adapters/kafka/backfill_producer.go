@@ -12,8 +12,9 @@ import (
 )
 
 type ProducerConfig struct {
-	Brokers []string
-	Topic   string
+	Brokers  []string
+	Topic    string
+	Security SecurityConfig
 }
 
 type BackfillProducer struct {
@@ -38,6 +39,10 @@ type backfillRequestedEvent struct {
 }
 
 func NewBackfillProducer(cfg ProducerConfig, registry *metrics.Registry) *BackfillProducer {
+	transport, err := cfg.Security.transport()
+	if err != nil {
+		transport = nil
+	}
 	return &BackfillProducer{
 		topic: cfg.Topic,
 		writer: &kafka.Writer{
@@ -50,6 +55,7 @@ func NewBackfillProducer(cfg ProducerConfig, registry *metrics.Registry) *Backfi
 			BatchTimeout:           10 * time.Millisecond,
 			WriteTimeout:           10 * time.Second,
 			ReadTimeout:            10 * time.Second,
+			Transport:              transport,
 		},
 		metrics: registry,
 	}

@@ -57,7 +57,11 @@ async def lifespan(app: FastAPI):
         scheduler = WeatherScheduler(
             weather_service,
             station_repo,
+            redis_client=redis_client,
             collection_interval=settings.update_interval_seconds,
+            scheduler_lock_enabled=settings.scheduler_lock_enabled,
+            scheduler_lock_key=settings.scheduler_lock_key,
+            scheduler_lock_ttl_seconds=settings.scheduler_lock_ttl_seconds,
         )
         _scheduler_task = asyncio.create_task(scheduler.start())
         logger.info("scheduler_started")

@@ -43,6 +43,11 @@ type KafkaConfig struct {
 	ActualWeatherTopic string
 	BackfillJobsTopic  string
 	GroupID            string
+	SecurityProtocol   string
+	SASLMechanism      string
+	Username           string
+	Password           string
+	SSLSkipVerify      bool
 	MinBytes           int
 	MaxBytes           int
 	CommitInterval     time.Duration
@@ -103,6 +108,11 @@ func Load() Config {
 			ActualWeatherTopic: env("KAFKA_ACTUAL_WEATHER_TOPIC", "actual-weather.raw.v1"),
 			BackfillJobsTopic:  env("KAFKA_BACKFILL_JOBS_TOPIC", "backfill.jobs.v1"),
 			GroupID:            env("KAFKA_GROUP_ID", "core-api-actual-weather"),
+			SecurityProtocol:   env("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT"),
+			SASLMechanism:      env("KAFKA_SASL_MECHANISM", "SCRAM-SHA-512"),
+			Username:           env("KAFKA_USERNAME", ""),
+			Password:           env("KAFKA_PASSWORD", ""),
+			SSLSkipVerify:      boolEnv("KAFKA_SSL_SKIP_VERIFY", false),
 			MinBytes:           intEnv("KAFKA_MIN_BYTES", 1),
 			MaxBytes:           intEnv("KAFKA_MAX_BYTES", 10e6),
 			CommitInterval:     durationEnv("KAFKA_COMMIT_INTERVAL", time.Second),

@@ -5,6 +5,7 @@ Used for publishing weather events to Kafka.
 
 import asyncio
 import json
+import ssl
 from typing import Optional
 
 import structlog
@@ -49,10 +50,27 @@ async def create_kafka_publisher(settings: Settings) -> KafkaPublisher:
     """Create Kafka publisher instance."""
     logger.info(f"Creating Kafka publisher with brokers: {settings.kafka_broker_list}")
     
-    producer = AIOKafkaProducer(
-        bootstrap_servers=settings.kafka_broker_list,
-        request_timeout_ms=settings.kafka_timeout_ms,
-    )
+    producer_kwargs = {
+        "bootstrap_servers": settings.kafka_broker_list,
+        "request_timeout_ms": settings.kafka_timeout_ms,
+        "security_protocol": settings.kafka_security_protocol,
+    }
+    if "SSL" in settings.kafka_security_protocol:
+        ssl_context = ssl.create_default_context()
+        if settings.kafka_ssl_skip_verify:
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+        producer_kwargs["ssl_context"] = ssl_context
+    if settings.kafka_username:
+        producer_kwargs.update(
+            {
+                "sasl_mechanism": settings.kafka_sasl_mechanism,
+                "sasl_plain_username": settings.kafka_username,
+                "sasl_plain_password": settings.kafka_password,
+            }
+        )
+
+    producer = AIOKafkaProducer(**producer_kwargs)
     await producer.start()
     logger.info("Kafka producer started")
     
@@ -102,4 +120,3 @@ async def check_kafka(brokers: list[str]) -> None:
     except Exception as e:
         logger.error(f"Kafka connectivity check failed: {e}")
         raise
-

@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     redis_host: str = "redis"
     redis_port: int = 6379
+    redis_password: str = ""
     redis_db: int = 0
     redis_url: str | None = None
     redis_ttl_seconds: int = 3600
@@ -27,6 +28,11 @@ class Settings(BaseSettings):
     kafka_brokers: str = "kafka:9092"
     kafka_topic: str = "weather.actual"
     kafka_timeout_ms: int = 10000
+    kafka_security_protocol: str = "PLAINTEXT"
+    kafka_sasl_mechanism: str = "SCRAM-SHA-512"
+    kafka_username: str = ""
+    kafka_password: str = ""
+    kafka_ssl_skip_verify: bool = False
 
     yandex_weather_url: str = "https://api.weather.yandex.ru/v2/informers"
     yandex_weather_api_key: str = ""
@@ -35,6 +41,9 @@ class Settings(BaseSettings):
     retry_backoff_factor: float = 2.0
     update_interval_seconds: int = 3600
     station_name_filter: str | None = None
+    scheduler_lock_enabled: bool = True
+    scheduler_lock_key: str = "actual-weather-feather:scheduler:leader"
+    scheduler_lock_ttl_seconds: int = 3900
 
     temp_min: float = -100.0
     temp_max: float = 100.0
@@ -56,7 +65,8 @@ class Settings(BaseSettings):
 
                                              
         if not self.redis_url:
-            self.redis_url = f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
+            auth = f":{self.redis_password}@" if self.redis_password else ""
+            self.redis_url = f"redis://{auth}{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
     @property
     def kafka_broker_list(self) -> list[str]:

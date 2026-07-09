@@ -18,6 +18,7 @@ type ConsumerConfig struct {
 	Brokers        []string
 	Topic          string
 	GroupID        string
+	Security       SecurityConfig
 	MinBytes       int
 	MaxBytes       int
 	CommitInterval time.Duration
@@ -43,11 +44,16 @@ type ActualWeatherConsumer struct {
 }
 
 func NewActualWeatherConsumer(cfg ConsumerConfig, decoder ActualWeatherDecoder, repo domain.ActualWeatherRepository, log *slog.Logger, registry *metrics.Registry, dedup Deduplicator) *ActualWeatherConsumer {
+	dialer, err := cfg.Security.dialer()
+	if err != nil {
+		dialer = nil
+	}
 	return &ActualWeatherConsumer{
 		reader: kafka.NewReader(kafka.ReaderConfig{
 			Brokers:        cfg.Brokers,
 			Topic:          cfg.Topic,
 			GroupID:        cfg.GroupID,
+			Dialer:         dialer,
 			MinBytes:       cfg.MinBytes,
 			MaxBytes:       cfg.MaxBytes,
 			CommitInterval: cfg.CommitInterval,
@@ -162,16 +168,16 @@ func NewJSONActualWeatherDecoder() JSONActualWeatherDecoder {
 }
 
 type jsonActualWeatherPayload struct {
-	ID                 string    `json:"id"`
-	StationID          string    `json:"stationId"`
-	ObservedAt         time.Time `json:"observedAt"`
-	Temperature        *float64  `json:"temperature"`
-	WindSpeed          *float64  `json:"windSpeed"`
-	WindGust           *float64  `json:"windGust"`
-	Humidity           *float64  `json:"humidity"`
-	Pressure           *float64  `json:"pressure"`
-	Source             string    `json:"source"`
-	TraceID            string    `json:"traceId"`
+	ID          string    `json:"id"`
+	StationID   string    `json:"stationId"`
+	ObservedAt  time.Time `json:"observedAt"`
+	Temperature *float64  `json:"temperature"`
+	WindSpeed   *float64  `json:"windSpeed"`
+	WindGust    *float64  `json:"windGust"`
+	Humidity    *float64  `json:"humidity"`
+	Pressure    *float64  `json:"pressure"`
+	Source      string    `json:"source"`
+	TraceID     string    `json:"traceId"`
 }
 
 func (d JSONActualWeatherDecoder) Decode(message kafka.Message) (domain.ActualWeatherReading, error) {

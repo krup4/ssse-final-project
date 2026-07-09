@@ -114,11 +114,20 @@ func main() {
 		}
 	}
 
+	kafkaSecurity := kafka.SecurityConfig{
+		Protocol:   cfg.Kafka.SecurityProtocol,
+		Mechanism:  cfg.Kafka.SASLMechanism,
+		Username:   cfg.Kafka.Username,
+		Password:   cfg.Kafka.Password,
+		SkipVerify: cfg.Kafka.SSLSkipVerify,
+	}
+
 	var backfillProducer *kafka.BackfillProducer
 	if cfg.Kafka.Enabled {
 		backfillProducer = kafka.NewBackfillProducer(kafka.ProducerConfig{
-			Brokers: cfg.Kafka.Brokers,
-			Topic:   cfg.Kafka.BackfillJobsTopic,
+			Brokers:  cfg.Kafka.Brokers,
+			Topic:    cfg.Kafka.BackfillJobsTopic,
+			Security: kafkaSecurity,
 		}, metricRegistry)
 		defer func() {
 			if err := backfillProducer.Close(); err != nil {
@@ -159,6 +168,7 @@ func main() {
 			Brokers:        cfg.Kafka.Brokers,
 			Topic:          cfg.Kafka.ActualWeatherTopic,
 			GroupID:        cfg.Kafka.GroupID,
+			Security:       kafkaSecurity,
 			MinBytes:       cfg.Kafka.MinBytes,
 			MaxBytes:       cfg.Kafka.MaxBytes,
 			CommitInterval: cfg.Kafka.CommitInterval,

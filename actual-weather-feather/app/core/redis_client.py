@@ -43,6 +43,30 @@ class RedisClient:
             ttl = timedelta(seconds=ttl)
         await self._client.set(key, value, ex=int(ttl.total_seconds()))
 
+    async def acquire_lock(self, key: str, value: str, ttl: timedelta | int) -> bool:
+        """Acquire a distributed lock using SET NX EX."""
+        if isinstance(ttl, int):
+            ttl = timedelta(seconds=ttl)
+        acquired = await self._client.set(
+            key,
+            value,
+            ex=int(ttl.total_seconds()),
+            nx=True,
+        )
+        return bool(acquired)
+
+    async def release_lock(self, key: str, value: str) -> bool:
+        """Release a distributed lock only if owned by the caller."""
+        script = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end
+"""
+        released = await self._client.eval(script, 1, key, value)
+        return bool(released)
+
     async def delete(self, key: str) -> None:
         """Delete value from Redis."""
         await self._client.delete(key)
@@ -88,4 +112,3 @@ async def get_redis() -> RedisClient:
     if not _redis_client:
         raise RuntimeError("Redis client not initialized")
     return _redis_client
-
