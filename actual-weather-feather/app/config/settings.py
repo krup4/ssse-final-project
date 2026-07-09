@@ -36,6 +36,7 @@ class Settings(BaseSettings):
 
     yandex_weather_url: str = "https://api.weather.yandex.ru/v2/informers"
     yandex_weather_api_key: str = ""
+    yandex_weather_rate_limit_rps: float = 1.0
     request_timeout: float = 10.0
     http_retries: int = 3
     retry_backoff_factor: float = 2.0

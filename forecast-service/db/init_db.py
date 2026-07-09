@@ -7,99 +7,21 @@ async def _fill_stations(pool: asyncpg.Pool) -> None:
         stations = json.load(file)
 
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT
-                id,
-                name,
-                lon,
-                lat
-            FROM stations
-            ORDER BY id
-            """
-        )
-
-        if not rows:
-            await conn.executemany(
-                """
-                INSERT INTO stations (name, lat, lon)
-                VALUES ($1, $2, $3)
-                """,
-                stations
-            )
-
-
-async def _fill_forecast_fields(pool: asyncpg.Pool) -> None:
-    async with pool.acquire() as conn:
         await conn.executemany(
             """
-            INSERT INTO forecast_fields (name)
-            VALUES ($1)
-            ON CONFLICT (name) DO NOTHING
+            INSERT INTO stations (name, lat, lon)
+            SELECT $1::text, $2::double precision, $3::double precision
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM stations
+                WHERE name::text = $1::text
+                  AND lat = $2::double precision
+                  AND lon = $3::double precision
+            )
             """,
-            [
-                ("temperature",),
-                ("wind_speed",),
-                ("humidity",),
-                ("pressure",),
-            ],
+            stations
         )
 
 
-async def _ensure_tables(pool: asyncpg.Pool) -> None:
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS forecast_fields (
-                id      SERIAL PRIMARY KEY,
-                name    TEXT NOT NULL UNIQUE
-            )
-        """)
-
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS stations (
-                id      SERIAL PRIMARY KEY,
-                name    TEXT NOT NULL,
-                lon     DOUBLE PRECISION NOT NULL,
-                lat     DOUBLE PRECISION NOT NULL
-            )
-        """)
-
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS forecasts (
-                id          SERIAL PRIMARY KEY,
-                dt          TIMESTAMP NOT NULL,
-                field_id    INTEGER NOT NULL REFERENCES forecast_fields(id),
-                value       DOUBLE PRECISION NOT NULL,
-                station_id  INTEGER NOT NULL REFERENCES stations(id)
-            )
-        """)
-
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_forecasts_dt
-            ON forecasts(dt)
-        """)
-
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_forecasts_station
-            ON forecasts(station_id)
-        """)
-
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_forecasts_field
-            ON forecasts(field_id)
-        """)
-
-        await conn.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_forecasts_unique
-            ON forecasts(dt, station_id, field_id)
-        """)
-
-
-async def _init_db(pool: asyncpg.Pool) -> None:
-    print(1)
-    await _ensure_tables(pool)
-    print(2)
+async def fill_initial_stations(pool: asyncpg.Pool) -> None:
     await _fill_stations(pool)
-    print(3)
-    await _fill_forecast_fields(pool)
-    print(4)

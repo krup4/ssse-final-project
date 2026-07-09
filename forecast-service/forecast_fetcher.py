@@ -3,9 +3,13 @@ import os
 import logging
 from typing import Optional
 
+from rate_limiter import AsyncRateLimiter
+
 
 API_KEY = os.getenv("FORECAST_API_KEY", "API-KEY")
 URL = os.getenv("URL", "https://api.weather.yandex.ru/graphql/query")
+RATE_LIMIT_RPS = float(os.getenv("FORECAST_RATE_LIMIT_RPS", "1"))
+RATE_LIMITER = AsyncRateLimiter(RATE_LIMIT_RPS)
 
 HEADERS = {
     'X-Yandex-Weather-Key': API_KEY,
@@ -34,6 +38,7 @@ async def get_forecast(lat: float, lon: float) -> Optional[dict]:
     query = BASIC_QUERY.format(lat, lon)
 
     try:
+        await RATE_LIMITER.wait()
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 URL,

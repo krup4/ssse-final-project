@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI):
             settings.yandex_weather_url,
             settings.yandex_weather_api_key,
             settings.request_timeout,
+            settings.yandex_weather_rate_limit_rps,
         )
         station_repo = StationRepository(db_pool, name_filter=settings.station_name_filter)
 

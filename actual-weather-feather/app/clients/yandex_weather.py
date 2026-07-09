@@ -11,6 +11,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from app.core.rate_limiter import AsyncRateLimiter
 from app.models.schemas import WeatherMeasurement, YandexWeatherResponse
 from app.monitoring.metrics import (
     REQUEST_DURATION_SECONDS,
@@ -31,13 +32,14 @@ def _on_retry(retry_state: RetryCallState) -> None:
 
 
 class YandexWeatherClient:
-    def __init__(self, base_url: str, api_key: str, timeout: float) -> None:
+    def __init__(self, base_url: str, api_key: str, timeout: float, rate_limit_rps: float = 1.0) -> None:
         self._base_url = base_url.rstrip("/")
         if not api_key:
             raise ValueError("YANDEX_WEATHER_API_KEY is required for YandexWeatherClient")
         self._headers = {"X-Yandex-Weather-Key": api_key}
         self._timeout = timeout
         self._client = httpx.AsyncClient(timeout=timeout, headers=self._headers)
+        self._rate_limiter = AsyncRateLimiter(rate_limit_rps)
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -53,6 +55,7 @@ class YandexWeatherClient:
             reraise=True,
         )
         async def _fetch() -> YandexWeatherResponse:
+            await self._rate_limiter.wait()
             WEATHER_REQUESTS_TOTAL.inc()
             start = time.perf_counter()
             try:
